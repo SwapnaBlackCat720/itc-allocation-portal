@@ -1,0 +1,2 @@
+# Ignore the file containing passwords and email credentials
+.streamlit/secrets.toml
