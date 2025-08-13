@@ -1,4 +1,4 @@
-# app.py (v42 - FINAL, CORRECTED Google Drive Link)
+# app.py (v48 - FINAL, Sliders Restored)
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -22,9 +22,10 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 # ----------------- The Backend "Engine" -----------------
 @st.cache_data
-def load_data(input_url):
-    # <<< FIX: Now reads the Excel file directly from the Google Drive download link
-    df = pd.read_excel(input_url)
+def load_data(url):
+    file_id = url.split('/d/')[1].split('/')[0]
+    csv_url = f'https://docs.google.com/spreadsheets/d/{file_id}/export?format=csv'
+    df = pd.read_csv(csv_url)
     df.columns = [c.strip() for c in df.columns]
     return df
 
@@ -90,19 +91,15 @@ else:
     st.sidebar.success(f"Welcome, {st.session_state['username']}!")
     st.sidebar.header("⚙️ Scenario Controls")
     try:
-        # <<< --- GITHUB-READY FIX: Using the CORRECT Google Drive download link --- >>>
-        INPUT_DATA_URL = "https://drive.google.com/uc?export=download&id=1g1F863VgDK0QOR0rnAOm3pEF0QJvyg-U"
+        INPUT_DATA_URL = "https://docs.google.com/spreadsheets/d/1jnF_J1X4oq6-f-heomauZrRuFpjlbik9_tYGL5ceoNM/edit?usp=sharing"
         DEMO_XLSX = "demo.xlsx"
         
         original_df = load_data(INPUT_DATA_URL); oos_df, manager_df = load_demo_data(DEMO_XLSX)
         
-        st.sidebar.markdown("---"); st.sidebar.header("🎯 Campaign Objective")
-        objective = st.sidebar.selectbox("Select the primary goal:",("Balanced Growth (50/50)","Maximize Profitability (80/20)","Aggressive Acquisition (20/80)"));
-        if "Balanced" in objective: roas_w = 0.50
-        elif "Profitability" in objective: roas_w = 0.80
-        elif "Acquisition" in objective: roas_w = 0.20
-        st.sidebar.info(f"Optimizing for **{objective}**.")
+        # <<< --- CHANGE: Removed the scenario dropdown and restored the direct sliders --- >>>
         budget_mult = st.sidebar.slider("Budget Multiplier", 0.5, 2.5, 1.2, 0.1)
+        roas_w = st.sidebar.slider("ROAS / NTB Weight", 0.0, 1.0, 0.5, 0.05, help="Slide to define the importance of ROAS vs. NTB%.")
+        st.sidebar.metric("Resulting NTB % Weight", f"{(1.0 - roas_w):.0%}")
         
         if st.sidebar.button("🚀 Run Predictive Allocation", type="primary", use_container_width=True):
             with st.spinner("🧠 Running predictive model..."): st.session_state.final_df = calculate_allocation(original_df, budget_mult, roas_w)
@@ -125,7 +122,8 @@ else:
                 final_df = st.session_state.final_df; st.expander("🔍 Filter Dashboard Results", expanded=True); col1, col2, col3, col4, col5 = st.columns(5); brands = sorted(final_df['Brand'].unique()); selected_brands = col1.multiselect("Brand", brands, default=brands); platforms = sorted(final_df['Platform'].unique()); selected_platforms = col2.multiselect("Platform", platforms, default=platforms); ad_types = sorted(final_df['Ad Type'].unique()); selected_ad_types = col3.multiselect("Ad Type", ad_types, default=ad_types); tiers = sorted(final_df['Tier'].unique()); selected_tiers = col4.multiselect("Tier", tiers, default=tiers); time_slots = sorted(final_df['Time Slot'].unique()); selected_slots = col5.multiselect("Time Slot", time_slots, default=time_slots)
                 filtered_df = final_df[(final_df['Brand'].isin(selected_brands)) & (final_df['Platform'].isin(selected_platforms)) & (final_df['Ad Type'].isin(selected_ad_types)) & (final_df['Tier'].isin(selected_tiers)) & (final_df['Time Slot'].isin(selected_slots))]; st.header("Financial Summary"); kpi_cols = st.columns(3); original_budget = filtered_df['Budget Spent'].sum(); new_budget = filtered_df['Final_Allocated_Budget'].sum(); sales = filtered_df['Direct Sales'].sum(); kpi_cols[0].metric("Original Budget", f"${original_budget:,.0f}"); kpi_cols[1].metric("Optimized Budget", f"${new_budget:,.0f}", f"{(new_budget - original_budget):,.0f}"); kpi_cols[2].metric("Historical Sales", f"${sales:,.0f}"); st.markdown("---"); st.header("Allocation Visualizations"); viz_cols = st.columns(2); brand_summary = filtered_df.groupby('Brand')['Final_Allocated_Budget'].sum().sort_values(ascending=False); fig_brand = px.bar(brand_summary, x=brand_summary.index, y='Final_Allocated_Budget', title="Optimized Budget by Brand", labels={'Final_Allocated_Budget': 'Budget ($)', 'index': 'Brand'}, text_auto='.2s'); fig_brand.update_traces(textposition='outside'); viz_cols[0].plotly_chart(fig_brand, use_container_width=True)
                 platform_summary = filtered_df.groupby('Platform')['Final_Allocated_Budget'].sum(); fig_platform = px.pie(platform_summary, values='Final_Allocated_Budget', names=platform_summary.index, title="Optimized Budget by Platform", hole=.3); viz_cols[1].plotly_chart(fig_platform, use_container_width=True)
-                st.markdown("---"); st.header("💡 Key Insights from the AI Model"); top_brand = brand_summary.index[0]; top_platform = platform_summary.index[0]; st.markdown(f"Based on the **{objective}** objective, the model recommends:\n- **Prioritize Brand:** The largest portion of the new budget (`${brand_summary.iloc[0]:,.0f}`) is allocated to **{top_brand}**.\n- **Focus Platform:** The **{top_platform}** platform receives the largest share of spend.")
+                # <<< CHANGE: Removed the {objective} variable from the insights text
+                st.markdown("---"); st.header("💡 Key Insights from the AI Model"); top_brand = brand_summary.index[0]; top_platform = platform_summary.index[0]; st.markdown(f"Based on the current weights, the model recommends:\n- **Prioritize Brand:** The largest portion of the new budget (`${brand_summary.iloc[0]:,.0f}`) is allocated to **{top_brand}**.\n- **Focus Platform:** The **{top_platform}** platform receives the largest share of spend.")
             else: st.info("Click 'Run' to generate an allocation.")
         with tab2:
             if 'final_df' in st.session_state: st.header("Full Allocation Details"); st.dataframe(st.session_state.final_df); st.download_button("📥 Download Full Data", to_csv(st.session_state.final_df), "full_alloc.csv")
@@ -145,7 +143,8 @@ else:
             st.header("Action Center: Low Stock Alerts"); st.markdown("Displays items with **Stock <= 5** in the **last 30 minutes**.")
             if st.button("🔄 Reset Low Stock List"): st.session_state.resolved_oos = set(); st.toast("Resolved list cleared."); st.rerun()
             st.metric("Actionable Low Stock Alerts", unresolved_oos_count); st.markdown("---")
-            if unresolved_oos_count == 0: st.success("✅ No recent low stock issues found.")
+            if unresolved_oos_count == 0:
+                st.success("✅ No recent low stock issues found.")
             else:
                 unresolved_oos_df = recent_oos[~recent_oos.index.isin(st.session_state.get('resolved_oos', set()))]
                 oos_with_managers = pd.merge(unresolved_oos_df, manager_df, on='Pin Code', how='left'); oos_with_managers['contact'].fillna('Not Available', inplace=True)
@@ -163,7 +162,5 @@ else:
             st.header("Open the Live E-Commerce Dashboard"); POWER_BI_URL = "https://app.powerbi.com/groups/me/reports/4d9f2e70-e22d-464c-a997-355c8559558e/4f5955ee3b04ded7b3da?experience=power-bi"
             st.markdown(f'<a href="{POWER_BI_URL}" target="_blank" style="display: inline-block; padding: 12px 20px; background-color: #1a73e8; color: white; text-align: center; text-decoration: none; font-size: 16px; border-radius: 5px;">🔗 Open Secure Power BI Report</a>', unsafe_allow_html=True)
 
-    except FileNotFoundError as e:
-        st.error(f"File not found: {e.filename}. Please make sure 'demo.xlsx' is in the same folder as the app.")
     except Exception as e:
         st.error(f"An unexpected error occurred: {e}")
