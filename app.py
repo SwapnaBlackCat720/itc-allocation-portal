@@ -1,4 +1,4 @@
-# app.py (v40 - FINAL, Reading from Google Sheets)
+# app.py (v41 - FINAL, Google Sheets URL Implemented)
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -23,14 +23,13 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 # ----------------- The Backend "Engine" -----------------
 @st.cache_data
 def load_data(input_url):
-    # <<< CHANGE: Now reads directly from the Google Sheets CSV export URL
+    # <<< THIS FUNCTION NOW READS FROM A URL (YOUR GOOGLE SHEET) >>>
     df = pd.read_csv(input_url)
     df.columns = [c.strip() for c in df.columns]
     return df
 
 @st.cache_data
 def load_demo_data(input_file):
-    # (This function is unchanged, it still reads the local demo.xlsx)
     xls = pd.ExcelFile(input_file); df_s1 = pd.read_excel(xls, sheet_name='s1'); df_s2 = pd.read_excel(xls, sheet_name='s2')
     if 'Pincode' in df_s1.columns: df_s1.rename(columns={'Pincode': 'Pin Code'}, inplace=True)
     if 'Pincode' in df_s2.columns: df_s2.rename(columns={'Pincode': 'Pin Code'}, inplace=True)
@@ -91,18 +90,24 @@ else:
     st.sidebar.success(f"Welcome, {st.session_state['username']}!")
     st.sidebar.header("⚙️ Scenario Controls")
     try:
-        # <<< --- GITHUB-READY FIX: Using the Google Sheet URL --- >>>
+        # <<< --- THIS IS THE URL LINE YOU WERE LOOKING FOR --- >>>
+        # It replaces the old hardcoded file path.
         INPUT_DATA_URL = "https://docs.google.com/spreadsheets/d/1g1F863VgDK0QOR0rnAOm3pEF0QJvyg-U/export?format=csv&gid=0"
+        
+        # The local file for OOS alerts remains a relative path.
         DEMO_XLSX = "demo.xlsx"
         
-        original_df = load_data(INPUT_DATA_URL); oos_df, manager_df = load_demo_data(DEMO_XLSX)
+        # The app now calls the load_data function with the URL.
+        original_df = load_data(INPUT_DATA_URL)
+        oos_df, manager_df = load_demo_data(DEMO_XLSX)
+        
         budget_mult = st.sidebar.slider("Budget Multiplier", 0.5, 2.5, 1.2, 0.1); roas_w = st.sidebar.slider("ROAS / NTB Weight", 0.0, 1.0, 0.5, 0.5); st.sidebar.metric("Resulting NTB % Weight", f"{(1.0 - roas_w):.0%}")
         if st.sidebar.button("🚀 Run Predictive Allocation", type="primary", use_container_width=True):
             with st.spinner("🧠 Running predictive model..."): st.session_state.final_df = calculate_allocation(original_df.copy(), budget_mult, roas_w)
             st.toast("✅ Allocation complete!", icon="🎉")
         if st.sidebar.button("Logout"): st.session_state["authentication_status"] = False; st.session_state["username"] = None; st.rerun()
         
-        # (The rest of the app is unchanged and complete)
+        # --- Pre-calculation for Tab Badges (Complete and unchanged) ---
         unresolved_issues_count = 0; unresolved_oos_count = 0
         if all(col in original_df.columns for col in ['Date', 'Content Issue Flag']): df_copy = original_df.copy(); df_copy['Date'] = pd.to_datetime(df_copy['Date'], errors='coerce'); df_copy.dropna(subset=['Date'], inplace=True); end_date = df_copy['Date'].max(); start_date = end_date - timedelta(days=2); recent_issues = df_copy[(df_copy['Date'] >= start_date) & (df_copy['Content Issue Flag'].astype(str).str.lower() == 'yes')]; unresolved_issues_count = len(recent_issues[~recent_issues.index.isin(st.session_state.get('resolved_issues', set()))])
         if all(col in oos_df.columns for col in ['Time', 'Stock_Left']):
@@ -113,17 +118,16 @@ else:
         
         tab1, tab2, tab3, tab4, tab5 = st.tabs(["📊 Predictive Allocation", "📋 Raw Data", f"🚨 Content Issues ({unresolved_issues_count})", f"📉 Low Stock Alerts ({unresolved_oos_count})", "🌐 ITC E-COMMERCE"])
         
+        # --- All Tab Content is Fully Present ---
         with tab1:
             if 'final_df' in st.session_state:
                 final_df = st.session_state.final_df; st.expander("🔍 Filter Dashboard Results", expanded=True); col1, col2, col3, col4 = st.columns(4); brands = sorted(final_df['Brand'].unique()); selected_brands = col1.multiselect("Brand", brands, default=brands); platforms = sorted(final_df['Platform'].unique()); selected_platforms = col2.multiselect("Platform", platforms, default=platforms); ad_types = sorted(final_df['Ad Type'].unique()); selected_ad_types = col3.multiselect("Ad Type", ad_types, default=ad_types); tiers = sorted(final_df['Tier'].unique()); selected_tiers = col4.multiselect("Tier", tiers, default=tiers)
                 filtered_df = final_df[(final_df['Brand'].isin(selected_brands)) & (final_df['Platform'].isin(selected_platforms)) & (final_df['Ad Type'].isin(selected_ad_types)) & (final_df['Tier'].isin(selected_tiers))]; st.header("Financial Summary"); kpi_cols = st.columns(3); original_budget = filtered_df['Budget Spent'].sum(); new_budget = filtered_df['Final_Allocated_Budget'].sum(); sales = filtered_df['Direct Sales'].sum(); kpi_cols[0].metric("Original Budget", f"${original_budget:,.0f}"); kpi_cols[1].metric("Optimized Budget", f"${new_budget:,.0f}", f"{(new_budget - original_budget):,.0f}"); kpi_cols[2].metric("Historical Sales", f"${sales:,.0f}"); st.markdown("---"); st.header("Allocation Visualizations"); viz_cols = st.columns(2); brand_summary = filtered_df.groupby('Brand')['Final_Allocated_Budget'].sum().sort_values(ascending=False); fig_brand = px.bar(brand_summary, x=brand_summary.index, y='Final_Allocated_Budget', title="Optimized Budget by Brand", labels={'Final_Allocated_Budget': 'Budget ($)', 'index': 'Brand'}, text_auto='.2s'); fig_brand.update_traces(textposition='outside'); viz_cols[0].plotly_chart(fig_brand, use_container_width=True)
                 platform_summary = filtered_df.groupby('Platform')['Final_Allocated_Budget'].sum(); fig_platform = px.pie(platform_summary, values='Final_Allocated_Budget', names=platform_summary.index, title="Optimized Budget by Platform", hole=.3); viz_cols[1].plotly_chart(fig_platform, use_container_width=True)
             else: st.info("Click 'Run' to generate an allocation.")
-        
         with tab2:
             if 'final_df' in st.session_state: st.header("Full Allocation Details"); st.dataframe(st.session_state.final_df); st.download_button("📥 Download Full Data", to_csv(st.session_state.final_df), "full_alloc.csv")
             else: st.info("Run an allocation to see data.")
-        
         with tab3:
             st.header("Action Center: Content Issue Flags"); st.markdown("Unresolved items from the **last 3 days**.");
             if st.button("🔄 Reset Resolved List"): st.session_state.resolved_issues = set(); st.toast("Resolved list cleared."); st.rerun()
@@ -135,7 +139,6 @@ else:
                     with st.container(): st.markdown('<div class="issue-card">', unsafe_allow_html=True); col1, col2 = st.columns([3, 1]); col1.subheader(f"Brand: {row.get('Brand', 'N/A')} | SKU: {row.get('SKU', 'N/A')}"); col1.text(f"Platform: {row.get('Platform', 'N/A')} | Pin Code: {row.get('Pin Code', 'N/A')} | Date: {row['Date'].strftime('%Y-%m-%d')}"); col1.error(f"**Flag Type:** {row.get('Type of Flag', 'Unknown')}")
                     if col2.button("✔️ Mark as Resolved", key=f"resolve_{index}", use_container_width=True): st.session_state.resolved_issues.add(index); st.rerun()
                     st.markdown('</div>', unsafe_allow_html=True)
-        
         with tab4:
             st.header("Action Center: Low Stock Alerts"); st.markdown("Displays items with **Stock <= 5** in the **last 30 minutes**.")
             if st.button("🔄 Reset Low Stock List"): st.session_state.resolved_oos = set(); st.toast("Resolved list cleared."); st.rerun()
@@ -155,13 +158,11 @@ else:
                                     if send_oos_email(row['contact'], row['Brand'], row['SKU'], row['Pin Code'], row['Stock_Left']): st.toast(f"✅ Email sent to {row['contact']}!"); st.session_state.resolved_oos.add(row.name); st.rerun()
                                 else: st.warning("No manager email available.")
                         st.markdown('</div>', unsafe_allow_html=True)
-        
         with tab5:
-            st.header("Open the Live E-Commerce Dashboard"); POWER_BI_URL = "https.powerbi.com/groups/me/reports/4d9f2e70-e22d-464c-a997-355c8559558e/4f5955ee3b04ded7b3da?experience=power-bi"
+            st.header("Open the Live E-Commerce Dashboard"); POWER_BI_URL = "https.powerbi.com/groups/me/reports/4d9f2e70-e22d-464c-a_997-355c8559558e/4f5955ee3b04ded7b3da?experience=power-bi"
             st.markdown(f'<a href="{POWER_BI_URL}" target="_blank" style="display: inline-block; padding: 12px 20px; background-color: #1a73e8; color: white; text-align: center; text-decoration: none; font-size: 16px; border-radius: 5px;">🔗 Open Secure Power BI Report</a>', unsafe_allow_html=True)
 
     except FileNotFoundError as e:
-        # Now gives a more helpful error message
         st.error(f"File not found: {e.filename}. Please make sure 'demo.xlsx' is in the same folder as the app.")
     except Exception as e:
         st.error(f"An unexpected error occurred: {e}")
