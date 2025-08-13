@@ -1,4 +1,4 @@
-# app.py (v45 - ULTIMATE FIX with GDOWN Downloader)
+# app.py (v47 - FINAL, DEFINITIVE VERSION with Native Google Sheet)
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -11,7 +11,6 @@ from datetime import datetime, timedelta
 from passlib.context import CryptContext
 import smtplib
 from email.message import EmailMessage
-import gdown # <-- NEW, powerful library for Google Drive
 
 # --- Page Configuration & State ---
 st.set_page_config(layout="wide", page_title="ITC AI Budget Allocation Portal")
@@ -24,14 +23,11 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 # ----------------- The Backend "Engine" -----------------
 @st.cache_data
 def load_data(url):
-    # <<< --- THIS IS THE ULTIMATE, ROBUST FIX --- >>>
-    # Use gdown to handle Google Drive's security pages and download the file.
-    # It saves the file locally on the server with the name 'itcdata.xlsx'.
-    output = 'itcdata.xlsx'
-    gdown.download(url, output, quiet=False)
-    
-    # Now, read the file reliably from the local server disk.
-    df = pd.read_excel(output, engine='openpyxl')
+    # --- This function now uses the simple, reliable CSV export from a native Google Sheet ---
+    # Construct the CSV export URL from the sharing URL
+    file_id = url.split('/d/')[1].split('/')[0]
+    csv_url = f'https://docs.google.com/spreadsheets/d/{file_id}/export?format=csv'
+    df = pd.read_csv(csv_url)
     df.columns = [c.strip() for c in df.columns]
     return df
 
@@ -45,7 +41,7 @@ def load_demo_data(input_file):
     return df_s1, df_s2
 
 def calculate_allocation(df, budget_multiplier, roas_weight):
-    # (This function is unchanged)
+    # (This function is unchanged and correct)
     ntb_weight = 1.0 - roas_weight; grouping_keys = ["Time Slot", "Pin Code", "Tier", "Platform", "Brand", "SKU", "Ad Type", "OOS Flag", "Content Issue Flag"]; grouping_keys = [key for key in grouping_keys if key in df.columns]
     if pd.api.types.is_string_dtype(df["NTB (%)"]): df['Clean_NTB'] = pd.to_numeric(df["NTB (%)"].str.replace('%', '', regex=False), errors='coerce')
     else: df['Clean_NTB'] = pd.to_numeric(df["NTB (%)"], errors='coerce')
@@ -97,13 +93,12 @@ else:
     st.sidebar.success(f"Welcome, {st.session_state['username']}!")
     st.sidebar.header("⚙️ Scenario Controls")
     try:
-        # <<< --- Using the standard Google Drive sharing URL --- >>>
-        INPUT_DATA_URL = "https://docs.google.com/spreadsheets/d/1g1F863VgDK0QOR0rnAOm3pEF0QJvyg-U/edit?usp=sharing&ouid=100072253972348093208&rtpof=true&sd=true"
+        # --- Using the NEW, ROBUST Google Sheet URL ---
+        INPUT_DATA_URL = "https://docs.google.com/spreadsheets/d/1jnF_J1X4oq6-f-heomauZrRuFpjlbik9_tYGL5ceoNM/edit?usp=sharing"
         DEMO_XLSX = "demo.xlsx"
         
         original_df = load_data(INPUT_DATA_URL); oos_df, manager_df = load_demo_data(DEMO_XLSX)
         
-        # (The rest of the app UI is unchanged and complete)
         st.sidebar.markdown("---"); st.sidebar.header("🎯 Campaign Objective")
         objective = st.sidebar.selectbox("Select the primary goal:",("Balanced Growth (50/50)","Maximize Profitability (80/20)","Aggressive Acquisition (20/80)"));
         if "Balanced" in objective: roas_w = 0.50
@@ -117,6 +112,7 @@ else:
             st.toast("✅ Allocation complete!", icon="🎉")
         if st.sidebar.button("Logout"): st.session_state["authentication_status"] = False; st.session_state["username"] = None; st.rerun()
         
+        # (The rest of the app UI is unchanged and complete)
         unresolved_issues_count = 0; unresolved_oos_count = 0
         if all(col in original_df.columns for col in ['Date', 'Content Issue Flag']): df_copy = original_df.copy(); df_copy['Date'] = pd.to_datetime(df_copy['Date'], errors='coerce'); df_copy.dropna(subset=['Date'], inplace=True); end_date = df_copy['Date'].max(); start_date = end_date - timedelta(days=2); recent_issues = df_copy[(df_copy['Date'] >= start_date) & (df_copy['Content Issue Flag'].astype(str).str.lower() == 'yes')]; unresolved_issues_count = len(recent_issues[~recent_issues.index.isin(st.session_state.get('resolved_issues', set()))])
         if all(col in oos_df.columns for col in ['Time', 'Stock_Left']):
@@ -127,7 +123,6 @@ else:
         
         tab1, tab2, tab3, tab4, tab5 = st.tabs(["📊 Predictive Allocation", "📋 Raw Data", f"🚨 Content Issues ({unresolved_issues_count})", f"📉 Low Stock Alerts ({unresolved_oos_count})", "🌐 ITC E-COMMERCE"])
         
-        # (All tabs are complete and correct)
         with tab1:
             if 'final_df' in st.session_state:
                 final_df = st.session_state.final_df; st.expander("🔍 Filter Dashboard Results", expanded=True); col1, col2, col3, col4, col5 = st.columns(5); brands = sorted(final_df['Brand'].unique()); selected_brands = col1.multiselect("Brand", brands, default=brands); platforms = sorted(final_df['Platform'].unique()); selected_platforms = col2.multiselect("Platform", platforms, default=platforms); ad_types = sorted(final_df['Ad Type'].unique()); selected_ad_types = col3.multiselect("Ad Type", ad_types, default=ad_types); tiers = sorted(final_df['Tier'].unique()); selected_tiers = col4.multiselect("Tier", tiers, default=tiers); time_slots = sorted(final_df['Time Slot'].unique()); selected_slots = col5.multiselect("Time Slot", time_slots, default=time_slots)
@@ -153,8 +148,7 @@ else:
             st.header("Action Center: Low Stock Alerts"); st.markdown("Displays items with **Stock <= 5** in the **last 30 minutes**.")
             if st.button("🔄 Reset Low Stock List"): st.session_state.resolved_oos = set(); st.toast("Resolved list cleared."); st.rerun()
             st.metric("Actionable Low Stock Alerts", unresolved_oos_count); st.markdown("---")
-            if unresolved_oos_count == 0:
-                st.success("✅ No recent low stock issues found.")
+            if unresolved_oos_count == 0: st.success("✅ No recent low stock issues found.")
             else:
                 unresolved_oos_df = recent_oos[~recent_oos.index.isin(st.session_state.get('resolved_oos', set()))]
                 oos_with_managers = pd.merge(unresolved_oos_df, manager_df, on='Pin Code', how='left'); oos_with_managers['contact'].fillna('Not Available', inplace=True)
@@ -172,7 +166,5 @@ else:
             st.header("Open the Live E-Commerce Dashboard"); POWER_BI_URL = "https://app.powerbi.com/groups/me/reports/4d9f2e70-e22d-464c-a997-355c8559558e/4f5955ee3b04ded7b3da?experience=power-bi"
             st.markdown(f'<a href="{POWER_BI_URL}" target="_blank" style="display: inline-block; padding: 12px 20px; background-color: #1a73e8; color: white; text-align: center; text-decoration: none; font-size: 16px; border-radius: 5px;">🔗 Open Secure Power BI Report</a>', unsafe_allow_html=True)
 
-    except FileNotFoundError as e:
-        st.error(f"File not found: {e.filename}. Please make sure 'demo.xlsx' is in the same folder as the app and the Google Sheet link is correct.")
     except Exception as e:
         st.error(f"An unexpected error occurred: {e}")
