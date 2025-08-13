@@ -57,11 +57,11 @@ def get_allocation_recommendations(df, budget_multiplier, roas_weight):
     # <<< --- PERFORMANCE TUNING: Faster model parameters --- >>>
     params = {
         "objective": "regression_l1", "metric": "rmse", "verbosity": -1, "seed": 42,
-        "n_estimators": 100,      # A more direct way to set training rounds
-        "num_leaves": 20,         # Reduce complexity from 32
+        "n_estimators": 100,      # Reduced training rounds from 150
+        "num_leaves": 20,         # Reduced complexity from 32
         "learning_rate": 0.1      # A slightly faster learning rate
     }
-    model = lgb.train(params, lgb_data)
+    model = lgb.train(params, lgb_data) # No need for num_boost_round when using n_estimators
     
     df_agg['Predicted_Score'] = model.predict(X).clip(min=0)
     current_total_budget = df_agg['Budget Spent'].sum(); new_total_budget = current_total_budget * budget_multiplier
@@ -115,10 +115,13 @@ else:
         budget_mult = st.sidebar.slider("Budget Multiplier", 0.5, 2.5, 1.2, 0.1)
         roas_w = st.sidebar.slider("ROAS / NTB Weight", 0.0, 1.0, 0.5, 0.05)
         st.sidebar.metric("Resulting NTB % Weight", f"{(1.0 - roas_w):.0%}")
+        
+        # --- The button now calls the cached function directly ---
         if st.sidebar.button("🚀 Run Predictive Allocation", type="primary", use_container_width=True):
             with st.spinner("🧠 Running predictive model... This is only done once per setting change."):
                 st.session_state.final_df = get_allocation_recommendations(original_df.copy(), budget_mult, roas_w)
             st.toast("✅ Allocation complete!", icon="🎉")
+        
         if st.sidebar.button("Logout"):
             st.session_state.clear(); st.rerun()
         
