@@ -1,4 +1,4 @@
-# app.py (v49 - FINAL PERFORMANCE OPTIMIZED)
+# app.py (v50 - FINAL, HIGH-PERFORMANCE MODEL TUNING)
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -38,18 +38,11 @@ def load_demo_data(input_file):
     if 'Pin Code' in df_s2.columns: df_s2['Pin Code'] = df_s2['Pin Code'].astype(str).str.strip()
     return df_s1, df_s2
 
-# <<< --- PERFORMANCE FIX 1: The expensive model training is now in a cached function --- >>>
 @st.cache_data
 def get_allocation_recommendations(df, budget_multiplier, roas_weight):
-    """
-    This function trains the model and calculates the full allocation.
-    Streamlit will cache the result, so it only runs when the inputs change.
-    """
     ntb_weight = 1.0 - roas_weight
     grouping_keys = ["Time Slot", "Pin Code", "Tier", "Platform", "Brand", "SKU", "Ad Type", "OOS Flag", "Content Issue Flag"]
     grouping_keys = [key for key in df.columns if key in grouping_keys]
-    
-    # Data processing
     if pd.api.types.is_string_dtype(df["NTB (%)"]): df['Clean_NTB'] = pd.to_numeric(df["NTB (%)"].str.replace('%', '', regex=False), errors='coerce')
     else: df['Clean_NTB'] = pd.to_numeric(df["NTB (%)"], errors='coerce')
     agg_dict = {'Budget Spent': 'sum', 'Direct Sales': 'sum', 'Clean_NTB': 'mean'}
@@ -57,29 +50,24 @@ def get_allocation_recommendations(df, budget_multiplier, roas_weight):
     df_agg['Aggregated_ROAS'] = df_agg['Direct Sales'] / (df_agg['Budget Spent'] + 1e-6)
     df_agg['Optimization_Score'] = (roas_weight * df_agg['Aggregated_ROAS']) + (ntb_weight * df_agg['Clean_NTB'])
     df_agg.fillna(0, inplace=True)
-    
-    # Model Training
-    features = grouping_keys
-    X = df_agg[features]
-    y = df_agg['Optimization_Score']
+    features = grouping_keys; X = df_agg[features]; y = df_agg['Optimization_Score']
     for col in features: X[col] = X[col].astype("category")
     lgb_data = lgb.Dataset(X, label=y, categorical_feature=features)
-    params = {"objective": "regression_l1", "metric": "rmse", "verbosity": -1, "seed": 42}
-    # <<< --- PERFORMANCE FIX 2: Reduced training rounds for faster results --- >>>
-    model = lgb.train(params, lgb_data, num_boost_round=150) # Reduced from 200
     
-    # Prediction and Allocation
+    # <<< --- PERFORMANCE TUNING: Faster model parameters --- >>>
+    params = {
+        "objective": "regression_l1", "metric": "rmse", "verbosity": -1, "seed": 42,
+        "n_estimators": 100,      # A more direct way to set training rounds
+        "num_leaves": 20,         # Reduce complexity from 32
+        "learning_rate": 0.1      # A slightly faster learning rate
+    }
+    model = lgb.train(params, lgb_data)
+    
     df_agg['Predicted_Score'] = model.predict(X).clip(min=0)
-    current_total_budget = df_agg['Budget Spent'].sum()
-    new_total_budget = current_total_budget * budget_multiplier
-    brand_sales = df_agg.groupby('Brand')['Direct Sales'].sum()
-    brand_proportions = brand_sales / max(1, brand_sales.sum())
-    brand_budgets = brand_proportions * new_total_budget
-    df_agg['Brand_Allocated_Budget'] = df_agg['Brand'].map(brand_budgets)
-    df_agg['Brand_Total_Predicted_Score'] = df_agg.groupby('Brand')['Predicted_Score'].transform('sum')
-    df_agg['Final_Allocated_Budget'] = df_agg['Brand_Allocated_Budget'] * (df_agg['Predicted_Score'] / (df_agg['Brand_Total_Predicted_Score'] + 1e-6))
-    df_agg.fillna(0, inplace=True)
-    df_agg['Final_Allocated_Budget'] = df_agg['Final_Allocated_Budget'] * (new_total_budget / max(1, df_agg['Final_Allocated_Budget'].sum()))
+    current_total_budget = df_agg['Budget Spent'].sum(); new_total_budget = current_total_budget * budget_multiplier
+    brand_sales = df_agg.groupby('Brand')['Direct Sales'].sum(); brand_proportions = brand_sales / max(1, brand_sales.sum()); brand_budgets = brand_proportions * new_total_budget
+    df_agg['Brand_Allocated_Budget'] = df_agg['Brand'].map(brand_budgets); df_agg['Brand_Total_Predicted_Score'] = df_agg.groupby('Brand')['Predicted_Score'].transform('sum')
+    df_agg['Final_Allocated_Budget'] = df_agg['Brand_Allocated_Budget'] * (df_agg['Predicted_Score'] / (df_agg['Brand_Total_Predicted_Score'] + 1e-6)); df_agg.fillna(0, inplace=True); df_agg['Final_Allocated_Budget'] = df_agg['Final_Allocated_Budget'] * (new_total_budget / max(1, df_agg['Final_Allocated_Budget'].sum()))
     return df_agg
 
 def send_oos_email(manager_email, brand, sku, pincode, stock_left):
@@ -123,20 +111,14 @@ else:
     try:
         INPUT_DATA_URL = "https://docs.google.com/spreadsheets/d/1jnF_J1X4oq6-f-heomauZrRuFpjlbik9_tYGL5ceoNM/edit?usp=sharing"
         DEMO_XLSX = "demo.xlsx"
-        
         original_df = load_data(INPUT_DATA_URL); oos_df, manager_df = load_demo_data(DEMO_XLSX)
-        
         budget_mult = st.sidebar.slider("Budget Multiplier", 0.5, 2.5, 1.2, 0.1)
         roas_w = st.sidebar.slider("ROAS / NTB Weight", 0.0, 1.0, 0.5, 0.05)
         st.sidebar.metric("Resulting NTB % Weight", f"{(1.0 - roas_w):.0%}")
-        
         if st.sidebar.button("🚀 Run Predictive Allocation", type="primary", use_container_width=True):
             with st.spinner("🧠 Running predictive model... This is only done once per setting change."):
-                # <<< --- PERFORMANCE FIX 3: Calling the new cached function --- >>>
-                # The results are stored in session_state for immediate access by the filters.
                 st.session_state.final_df = get_allocation_recommendations(original_df.copy(), budget_mult, roas_w)
             st.toast("✅ Allocation complete!", icon="🎉")
-        
         if st.sidebar.button("Logout"):
             st.session_state.clear(); st.rerun()
         
@@ -150,7 +132,6 @@ else:
             unresolved_oos_count = len(recent_oos[~recent_oos.index.isin(st.session_state.get('resolved_oos', set()))])
         
         tab1, tab2, tab3, tab4, tab5 = st.tabs(["📊 Predictive Allocation", "📋 Raw Data", f"🚨 Content Issues ({unresolved_issues_count})", f"📉 Low Stock Alerts ({unresolved_oos_count})", "🌐 ITC E-COMMERCE"])
-        
         with tab1:
             if 'final_df' in st.session_state:
                 final_df = st.session_state.final_df; st.expander("🔍 Filter Dashboard Results", expanded=True); col1, col2, col3, col4, col5 = st.columns(5); brands = sorted(final_df['Brand'].unique()); selected_brands = col1.multiselect("Brand", brands, default=brands); platforms = sorted(final_df['Platform'].unique()); selected_platforms = col2.multiselect("Platform", platforms, default=platforms); ad_types = sorted(final_df['Ad Type'].unique()); selected_ad_types = col3.multiselect("Ad Type", ad_types, default=ad_types); tiers = sorted(final_df['Tier'].unique()); selected_tiers = col4.multiselect("Tier", tiers, default=tiers); time_slots = sorted(final_df['Time Slot'].unique()); selected_slots = col5.multiselect("Time Slot", time_slots, default=time_slots)
