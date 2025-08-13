@@ -1,4 +1,4 @@
-# app.py (v41 - FINAL with Corrected Google Sheet Link)
+# app.py (v42 - FINAL, CORRECTED Google Drive Link)
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -23,7 +23,8 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 # ----------------- The Backend "Engine" -----------------
 @st.cache_data
 def load_data(input_url):
-    df = pd.read_csv(input_url)
+    # <<< FIX: Now reads the Excel file directly from the Google Drive download link
+    df = pd.read_excel(input_url)
     df.columns = [c.strip() for c in df.columns]
     return df
 
@@ -38,7 +39,7 @@ def load_demo_data(input_file):
 
 def calculate_allocation(df, budget_multiplier, roas_weight):
     # (This function is unchanged)
-    ntb_weight = 1.0 - roas_weight; grouping_keys = ["Pin Code", "Tier", "Platform", "Brand", "SKU", "Ad Type", "OOS Flag", "Content Issue Flag"]; grouping_keys = [key for key in grouping_keys if key in df.columns]
+    ntb_weight = 1.0 - roas_weight; grouping_keys = ["Time Slot", "Pin Code", "Tier", "Platform", "Brand", "SKU", "Ad Type", "OOS Flag", "Content Issue Flag"]; grouping_keys = [key for key in grouping_keys if key in df.columns]
     if pd.api.types.is_string_dtype(df["NTB (%)"]): df['Clean_NTB'] = pd.to_numeric(df["NTB (%)"].str.replace('%', '', regex=False), errors='coerce')
     else: df['Clean_NTB'] = pd.to_numeric(df["NTB (%)"], errors='coerce')
     agg_dict = {'Budget Spent': 'sum', 'Direct Sales': 'sum', 'Clean_NTB': 'mean'}; df_agg = df.groupby(grouping_keys, as_index=False).agg(agg_dict); df_agg['Aggregated_ROAS'] = df_agg['Direct Sales'] / (df_agg['Budget Spent'] + 1e-6); df_agg['Optimization_Score'] = (roas_weight * df_agg['Aggregated_ROAS']) + (ntb_weight * df_agg['Clean_NTB']); df_agg.fillna(0, inplace=True)
@@ -89,14 +90,22 @@ else:
     st.sidebar.success(f"Welcome, {st.session_state['username']}!")
     st.sidebar.header("⚙️ Scenario Controls")
     try:
-        # <<< --- THIS IS THE CORRECTED GOOGLE SHEET LINK --- >>>
-        INPUT_DATA_URL = "https://docs.google.com/spreadsheets/d/1g1F863VgDK0QOR0rnAOm3pEF0QJvyg-U/export?format=csv&gid=0"
+        # <<< --- GITHUB-READY FIX: Using the CORRECT Google Drive download link --- >>>
+        INPUT_DATA_URL = "https://drive.google.com/uc?export=download&id=1g1F863VgDK0QOR0rnAOm3pEF0QJvyg-U"
         DEMO_XLSX = "demo.xlsx"
         
         original_df = load_data(INPUT_DATA_URL); oos_df, manager_df = load_demo_data(DEMO_XLSX)
-        budget_mult = st.sidebar.slider("Budget Multiplier", 0.5, 2.5, 1.2, 0.1); roas_w = st.sidebar.slider("ROAS / NTB Weight", 0.0, 1.0, 0.5, 0.5); st.sidebar.metric("Resulting NTB % Weight", f"{(1.0 - roas_w):.0%}")
+        
+        st.sidebar.markdown("---"); st.sidebar.header("🎯 Campaign Objective")
+        objective = st.sidebar.selectbox("Select the primary goal:",("Balanced Growth (50/50)","Maximize Profitability (80/20)","Aggressive Acquisition (20/80)"));
+        if "Balanced" in objective: roas_w = 0.50
+        elif "Profitability" in objective: roas_w = 0.80
+        elif "Acquisition" in objective: roas_w = 0.20
+        st.sidebar.info(f"Optimizing for **{objective}**.")
+        budget_mult = st.sidebar.slider("Budget Multiplier", 0.5, 2.5, 1.2, 0.1)
+        
         if st.sidebar.button("🚀 Run Predictive Allocation", type="primary", use_container_width=True):
-            with st.spinner("🧠 Running predictive model..."): st.session_state.final_df = calculate_allocation(original_df.copy(), budget_mult, roas_w)
+            with st.spinner("🧠 Running predictive model..."): st.session_state.final_df = calculate_allocation(original_df, budget_mult, roas_w)
             st.toast("✅ Allocation complete!", icon="🎉")
         if st.sidebar.button("Logout"): st.session_state["authentication_status"] = False; st.session_state["username"] = None; st.rerun()
         
@@ -113,15 +122,14 @@ else:
         
         with tab1:
             if 'final_df' in st.session_state:
-                final_df = st.session_state.final_df; st.expander("🔍 Filter Dashboard Results", expanded=True); col1, col2, col3, col4 = st.columns(4); brands = sorted(final_df['Brand'].unique()); selected_brands = col1.multiselect("Brand", brands, default=brands); platforms = sorted(final_df['Platform'].unique()); selected_platforms = col2.multiselect("Platform", platforms, default=platforms); ad_types = sorted(final_df['Ad Type'].unique()); selected_ad_types = col3.multiselect("Ad Type", ad_types, default=ad_types); tiers = sorted(final_df['Tier'].unique()); selected_tiers = col4.multiselect("Tier", tiers, default=tiers)
-                filtered_df = final_df[(final_df['Brand'].isin(selected_brands)) & (final_df['Platform'].isin(selected_platforms)) & (final_df['Ad Type'].isin(selected_ad_types)) & (final_df['Tier'].isin(selected_tiers))]; st.header("Financial Summary"); kpi_cols = st.columns(3); original_budget = filtered_df['Budget Spent'].sum(); new_budget = filtered_df['Final_Allocated_Budget'].sum(); sales = filtered_df['Direct Sales'].sum(); kpi_cols[0].metric("Original Budget", f"${original_budget:,.0f}"); kpi_cols[1].metric("Optimized Budget", f"${new_budget:,.0f}", f"{(new_budget - original_budget):,.0f}"); kpi_cols[2].metric("Historical Sales", f"${sales:,.0f}"); st.markdown("---"); st.header("Allocation Visualizations"); viz_cols = st.columns(2); brand_summary = filtered_df.groupby('Brand')['Final_Allocated_Budget'].sum().sort_values(ascending=False); fig_brand = px.bar(brand_summary, x=brand_summary.index, y='Final_Allocated_Budget', title="Optimized Budget by Brand", labels={'Final_Allocated_Budget': 'Budget ($)', 'index': 'Brand'}, text_auto='.2s'); fig_brand.update_traces(textposition='outside'); viz_cols[0].plotly_chart(fig_brand, use_container_width=True)
+                final_df = st.session_state.final_df; st.expander("🔍 Filter Dashboard Results", expanded=True); col1, col2, col3, col4, col5 = st.columns(5); brands = sorted(final_df['Brand'].unique()); selected_brands = col1.multiselect("Brand", brands, default=brands); platforms = sorted(final_df['Platform'].unique()); selected_platforms = col2.multiselect("Platform", platforms, default=platforms); ad_types = sorted(final_df['Ad Type'].unique()); selected_ad_types = col3.multiselect("Ad Type", ad_types, default=ad_types); tiers = sorted(final_df['Tier'].unique()); selected_tiers = col4.multiselect("Tier", tiers, default=tiers); time_slots = sorted(final_df['Time Slot'].unique()); selected_slots = col5.multiselect("Time Slot", time_slots, default=time_slots)
+                filtered_df = final_df[(final_df['Brand'].isin(selected_brands)) & (final_df['Platform'].isin(selected_platforms)) & (final_df['Ad Type'].isin(selected_ad_types)) & (final_df['Tier'].isin(selected_tiers)) & (final_df['Time Slot'].isin(selected_slots))]; st.header("Financial Summary"); kpi_cols = st.columns(3); original_budget = filtered_df['Budget Spent'].sum(); new_budget = filtered_df['Final_Allocated_Budget'].sum(); sales = filtered_df['Direct Sales'].sum(); kpi_cols[0].metric("Original Budget", f"${original_budget:,.0f}"); kpi_cols[1].metric("Optimized Budget", f"${new_budget:,.0f}", f"{(new_budget - original_budget):,.0f}"); kpi_cols[2].metric("Historical Sales", f"${sales:,.0f}"); st.markdown("---"); st.header("Allocation Visualizations"); viz_cols = st.columns(2); brand_summary = filtered_df.groupby('Brand')['Final_Allocated_Budget'].sum().sort_values(ascending=False); fig_brand = px.bar(brand_summary, x=brand_summary.index, y='Final_Allocated_Budget', title="Optimized Budget by Brand", labels={'Final_Allocated_Budget': 'Budget ($)', 'index': 'Brand'}, text_auto='.2s'); fig_brand.update_traces(textposition='outside'); viz_cols[0].plotly_chart(fig_brand, use_container_width=True)
                 platform_summary = filtered_df.groupby('Platform')['Final_Allocated_Budget'].sum(); fig_platform = px.pie(platform_summary, values='Final_Allocated_Budget', names=platform_summary.index, title="Optimized Budget by Platform", hole=.3); viz_cols[1].plotly_chart(fig_platform, use_container_width=True)
+                st.markdown("---"); st.header("💡 Key Insights from the AI Model"); top_brand = brand_summary.index[0]; top_platform = platform_summary.index[0]; st.markdown(f"Based on the **{objective}** objective, the model recommends:\n- **Prioritize Brand:** The largest portion of the new budget (`${brand_summary.iloc[0]:,.0f}`) is allocated to **{top_brand}**.\n- **Focus Platform:** The **{top_platform}** platform receives the largest share of spend.")
             else: st.info("Click 'Run' to generate an allocation.")
-        
         with tab2:
             if 'final_df' in st.session_state: st.header("Full Allocation Details"); st.dataframe(st.session_state.final_df); st.download_button("📥 Download Full Data", to_csv(st.session_state.final_df), "full_alloc.csv")
             else: st.info("Run an allocation to see data.")
-        
         with tab3:
             st.header("Action Center: Content Issue Flags"); st.markdown("Unresolved items from the **last 3 days**.");
             if st.button("🔄 Reset Resolved List"): st.session_state.resolved_issues = set(); st.toast("Resolved list cleared."); st.rerun()
@@ -130,4 +138,32 @@ else:
             else:
                 unresolved_issues_df = recent_issues[~recent_issues.index.isin(st.session_state.get('resolved_issues', set()))]
                 for index, row in unresolved_issues_df.iterrows():
-                    with st.container(): st.markdown('<div class="issue-card">', unsafe_allow_html=True); col1, col2 = st.columns([3, 1]); col1.subheader(f"Brand: {row.get('Brand', 'N/A')} | SKU: {row.get('SKU', 'N/A')}"); col1.text(f"Platform: {row.get('Platform', 'N/A')} | Pin Code: {row.get('Pin Code', 'N/A')} | Date: {row['Date'].strftime('%Y-%m-%d')}"); col1.error(f"**Flag Type:** {row.get('Typ
+                    with st.container(): st.markdown('<div class="issue-card">', unsafe_allow_html=True); col1, col2 = st.columns([3, 1]); col1.subheader(f"Brand: {row.get('Brand', 'N/A')} | SKU: {row.get('SKU', 'N/A')}"); col1.text(f"Platform: {row.get('Platform', 'N/A')} | Pin Code: {row.get('Pin Code', 'N/A')} | Date: {row['Date'].strftime('%Y-%m-%d')}"); col1.error(f"**Flag Type:** {row.get('Type of Flag', 'Unknown')}")
+                    if col2.button("✔️ Mark as Resolved", key=f"resolve_{index}", use_container_width=True): st.session_state.resolved_issues.add(index); st.rerun()
+                    st.markdown('</div>', unsafe_allow_html=True)
+        with tab4:
+            st.header("Action Center: Low Stock Alerts"); st.markdown("Displays items with **Stock <= 5** in the **last 30 minutes**.")
+            if st.button("🔄 Reset Low Stock List"): st.session_state.resolved_oos = set(); st.toast("Resolved list cleared."); st.rerun()
+            st.metric("Actionable Low Stock Alerts", unresolved_oos_count); st.markdown("---")
+            if unresolved_oos_count == 0: st.success("✅ No recent low stock issues found.")
+            else:
+                unresolved_oos_df = recent_oos[~recent_oos.index.isin(st.session_state.get('resolved_oos', set()))]
+                oos_with_managers = pd.merge(unresolved_oos_df, manager_df, on='Pin Code', how='left'); oos_with_managers['contact'].fillna('Not Available', inplace=True)
+                for index, row in oos_with_managers.iterrows():
+                    with st.container():
+                        st.markdown('<div class="issue-card" style="border-color: #fca130; border-left-color: #fca130; background-color: #fffaf0;">', unsafe_allow_html=True); col1, col2 = st.columns([3, 1])
+                        with col1: st.subheader(f"Brand: {row.get('Brand', 'N/A')} | SKU: {row.get('SKU', 'N/A')}"); st.text(f"Pin Code: {row.get('Pin Code', 'N/A')} | Manager: {row.get('contact', 'N/A')}"); st.warning(f"**Stock Left:** {row.get('Stock_Left', 0)} | **Time:** {row['Parsed_Timestamp'].time().strftime('%I:%M %p')}")
+                        with col2:
+                            if st.button("📧 Notify Manager", key=f"notify_{index}", use_container_width=True):
+                                if row['contact'] != 'Not Available':
+                                    if send_oos_email(row['contact'], row['Brand'], row['SKU'], row['Pin Code'], row['Stock_Left']): st.toast(f"✅ Email sent to {row['contact']}!"); st.session_state.resolved_oos.add(row.name); st.rerun()
+                                else: st.warning("No manager email available.")
+                        st.markdown('</div>', unsafe_allow_html=True)
+        with tab5:
+            st.header("Open the Live E-Commerce Dashboard"); POWER_BI_URL = "https://app.powerbi.com/groups/me/reports/4d9f2e70-e22d-464c-a997-355c8559558e/4f5955ee3b04ded7b3da?experience=power-bi"
+            st.markdown(f'<a href="{POWER_BI_URL}" target="_blank" style="display: inline-block; padding: 12px 20px; background-color: #1a73e8; color: white; text-align: center; text-decoration: none; font-size: 16px; border-radius: 5px;">🔗 Open Secure Power BI Report</a>', unsafe_allow_html=True)
+
+    except FileNotFoundError as e:
+        st.error(f"File not found: {e.filename}. Please make sure 'demo.xlsx' is in the same folder as the app.")
+    except Exception as e:
+        st.error(f"An unexpected error occurred: {e}")
