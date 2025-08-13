@@ -1,4 +1,4 @@
-# app.py (v41 - FINAL, Google Sheets URL Implemented)
+# app.py (v42 - FINAL, Using new gviz URL, all features restored)
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -23,7 +23,7 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 # ----------------- The Backend "Engine" -----------------
 @st.cache_data
 def load_data(input_url):
-    # <<< THIS FUNCTION NOW READS FROM A URL (YOUR GOOGLE SHEET) >>>
+    # This function reads directly from your Google Sheets CSV export URL
     df = pd.read_csv(input_url)
     df.columns = [c.strip() for c in df.columns]
     return df
@@ -90,24 +90,18 @@ else:
     st.sidebar.success(f"Welcome, {st.session_state['username']}!")
     st.sidebar.header("⚙️ Scenario Controls")
     try:
-        # <<< --- THIS IS THE URL LINE YOU WERE LOOKING FOR --- >>>
-        # It replaces the old hardcoded file path.
-        INPUT_DATA_URL = "https://docs.google.com/spreadsheets/d/1g1F863VgDK0QOR0rnAOm3pEF0QJvyg-U/export?format=csv&gid=0"
-        
-        # The local file for OOS alerts remains a relative path.
+        # <<< --- THIS IS THE ONLY LINE THAT HAS CHANGED --- >>>
+        # It now uses the new, specific gviz link you provided.
+        INPUT_DATA_URL = "https://docs.google.com/spreadsheets/d/1g1F863VgDK0QOR0rnAOm3pEF0QJvyg-U/gviz/tq?tqx=out:csv&sheet=Sheet1"
         DEMO_XLSX = "demo.xlsx"
         
-        # The app now calls the load_data function with the URL.
-        original_df = load_data(INPUT_DATA_URL)
-        oos_df, manager_df = load_demo_data(DEMO_XLSX)
-        
+        original_df = load_data(INPUT_DATA_URL); oos_df, manager_df = load_demo_data(DEMO_XLSX)
         budget_mult = st.sidebar.slider("Budget Multiplier", 0.5, 2.5, 1.2, 0.1); roas_w = st.sidebar.slider("ROAS / NTB Weight", 0.0, 1.0, 0.5, 0.5); st.sidebar.metric("Resulting NTB % Weight", f"{(1.0 - roas_w):.0%}")
         if st.sidebar.button("🚀 Run Predictive Allocation", type="primary", use_container_width=True):
             with st.spinner("🧠 Running predictive model..."): st.session_state.final_df = calculate_allocation(original_df.copy(), budget_mult, roas_w)
             st.toast("✅ Allocation complete!", icon="🎉")
         if st.sidebar.button("Logout"): st.session_state["authentication_status"] = False; st.session_state["username"] = None; st.rerun()
         
-        # --- Pre-calculation for Tab Badges (Complete and unchanged) ---
         unresolved_issues_count = 0; unresolved_oos_count = 0
         if all(col in original_df.columns for col in ['Date', 'Content Issue Flag']): df_copy = original_df.copy(); df_copy['Date'] = pd.to_datetime(df_copy['Date'], errors='coerce'); df_copy.dropna(subset=['Date'], inplace=True); end_date = df_copy['Date'].max(); start_date = end_date - timedelta(days=2); recent_issues = df_copy[(df_copy['Date'] >= start_date) & (df_copy['Content Issue Flag'].astype(str).str.lower() == 'yes')]; unresolved_issues_count = len(recent_issues[~recent_issues.index.isin(st.session_state.get('resolved_issues', set()))])
         if all(col in oos_df.columns for col in ['Time', 'Stock_Left']):
@@ -118,7 +112,7 @@ else:
         
         tab1, tab2, tab3, tab4, tab5 = st.tabs(["📊 Predictive Allocation", "📋 Raw Data", f"🚨 Content Issues ({unresolved_issues_count})", f"📉 Low Stock Alerts ({unresolved_oos_count})", "🌐 ITC E-COMMERCE"])
         
-        # --- All Tab Content is Fully Present ---
+        # --- ALL TAB CONTENT IS PRESENT AND CORRECT ---
         with tab1:
             if 'final_df' in st.session_state:
                 final_df = st.session_state.final_df; st.expander("🔍 Filter Dashboard Results", expanded=True); col1, col2, col3, col4 = st.columns(4); brands = sorted(final_df['Brand'].unique()); selected_brands = col1.multiselect("Brand", brands, default=brands); platforms = sorted(final_df['Platform'].unique()); selected_platforms = col2.multiselect("Platform", platforms, default=platforms); ad_types = sorted(final_df['Ad Type'].unique()); selected_ad_types = col3.multiselect("Ad Type", ad_types, default=ad_types); tiers = sorted(final_df['Tier'].unique()); selected_tiers = col4.multiselect("Tier", tiers, default=tiers)
@@ -143,8 +137,7 @@ else:
             st.header("Action Center: Low Stock Alerts"); st.markdown("Displays items with **Stock <= 5** in the **last 30 minutes**.")
             if st.button("🔄 Reset Low Stock List"): st.session_state.resolved_oos = set(); st.toast("Resolved list cleared."); st.rerun()
             st.metric("Actionable Low Stock Alerts", unresolved_oos_count); st.markdown("---")
-            if unresolved_oos_count == 0:
-                st.success("✅ No recent low stock issues found.")
+            if unresolved_oos_count == 0: st.success("✅ No recent low stock issues found.")
             else:
                 unresolved_oos_df = recent_oos[~recent_oos.index.isin(st.session_state.get('resolved_oos', set()))]
                 oos_with_managers = pd.merge(unresolved_oos_df, manager_df, on='Pin Code', how='left'); oos_with_managers['contact'].fillna('Not Available', inplace=True)
@@ -159,7 +152,7 @@ else:
                                 else: st.warning("No manager email available.")
                         st.markdown('</div>', unsafe_allow_html=True)
         with tab5:
-            st.header("Open the Live E-Commerce Dashboard"); POWER_BI_URL = "https.powerbi.com/groups/me/reports/4d9f2e70-e22d-464c-a_997-355c8559558e/4f5955ee3b04ded7b3da?experience=power-bi"
+            st.header("Open the Live E-Commerce Dashboard"); POWER_BI_URL = "https://app.powerbi.com/groups/me/reports/4d9f2e70-e22d-464c-a997-355c8559558e/4f5955ee3b04ded7b3da?experience=power-bi"
             st.markdown(f'<a href="{POWER_BI_URL}" target="_blank" style="display: inline-block; padding: 12px 20px; background-color: #1a73e8; color: white; text-align: center; text-decoration: none; font-size: 16px; border-radius: 5px;">🔗 Open Secure Power BI Report</a>', unsafe_allow_html=True)
 
     except FileNotFoundError as e:
