@@ -1,4 +1,4 @@
-# app.py (v40 - FINAL, Reading from Google Sheets)
+# app.py (v41 - FINAL with Corrected Google Sheet Link)
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -23,14 +23,12 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 # ----------------- The Backend "Engine" -----------------
 @st.cache_data
 def load_data(input_url):
-    # <<< CHANGE: Now reads directly from the Google Sheets CSV export URL
     df = pd.read_csv(input_url)
     df.columns = [c.strip() for c in df.columns]
     return df
 
 @st.cache_data
 def load_demo_data(input_file):
-    # (This function is unchanged, it still reads the local demo.xlsx)
     xls = pd.ExcelFile(input_file); df_s1 = pd.read_excel(xls, sheet_name='s1'); df_s2 = pd.read_excel(xls, sheet_name='s2')
     if 'Pincode' in df_s1.columns: df_s1.rename(columns={'Pincode': 'Pin Code'}, inplace=True)
     if 'Pincode' in df_s2.columns: df_s2.rename(columns={'Pincode': 'Pin Code'}, inplace=True)
@@ -91,7 +89,7 @@ else:
     st.sidebar.success(f"Welcome, {st.session_state['username']}!")
     st.sidebar.header("⚙️ Scenario Controls")
     try:
-        # <<< --- GITHUB-READY FIX: Using the Google Sheet URL --- >>>
+        # <<< --- THIS IS THE CORRECTED GOOGLE SHEET LINK --- >>>
         INPUT_DATA_URL = "https://docs.google.com/spreadsheets/d/1g1F863VgDK0QOR0rnAOm3pEF0QJvyg-U/export?format=csv&gid=0"
         DEMO_XLSX = "demo.xlsx"
         
@@ -132,36 +130,4 @@ else:
             else:
                 unresolved_issues_df = recent_issues[~recent_issues.index.isin(st.session_state.get('resolved_issues', set()))]
                 for index, row in unresolved_issues_df.iterrows():
-                    with st.container(): st.markdown('<div class="issue-card">', unsafe_allow_html=True); col1, col2 = st.columns([3, 1]); col1.subheader(f"Brand: {row.get('Brand', 'N/A')} | SKU: {row.get('SKU', 'N/A')}"); col1.text(f"Platform: {row.get('Platform', 'N/A')} | Pin Code: {row.get('Pin Code', 'N/A')} | Date: {row['Date'].strftime('%Y-%m-%d')}"); col1.error(f"**Flag Type:** {row.get('Type of Flag', 'Unknown')}")
-                    if col2.button("✔️ Mark as Resolved", key=f"resolve_{index}", use_container_width=True): st.session_state.resolved_issues.add(index); st.rerun()
-                    st.markdown('</div>', unsafe_allow_html=True)
-        
-        with tab4:
-            st.header("Action Center: Low Stock Alerts"); st.markdown("Displays items with **Stock <= 5** in the **last 30 minutes**.")
-            if st.button("🔄 Reset Low Stock List"): st.session_state.resolved_oos = set(); st.toast("Resolved list cleared."); st.rerun()
-            st.metric("Actionable Low Stock Alerts", unresolved_oos_count); st.markdown("---")
-            if unresolved_oos_count == 0:
-                st.success("✅ No recent low stock issues found.")
-            else:
-                unresolved_oos_df = recent_oos[~recent_oos.index.isin(st.session_state.get('resolved_oos', set()))]
-                oos_with_managers = pd.merge(unresolved_oos_df, manager_df, on='Pin Code', how='left'); oos_with_managers['contact'].fillna('Not Available', inplace=True)
-                for index, row in oos_with_managers.iterrows():
-                    with st.container():
-                        st.markdown('<div class="issue-card" style="border-color: #fca130; border-left-color: #fca130; background-color: #fffaf0;">', unsafe_allow_html=True); col1, col2 = st.columns([3, 1])
-                        with col1: st.subheader(f"Brand: {row.get('Brand', 'N/A')} | SKU: {row.get('SKU', 'N/A')}"); st.text(f"Pin Code: {row.get('Pin Code', 'N/A')} | Manager: {row.get('contact', 'N/A')}"); st.warning(f"**Stock Left:** {row.get('Stock_Left', 0)} | **Time:** {row['Parsed_Timestamp'].time().strftime('%I:%M %p')}")
-                        with col2:
-                            if st.button("📧 Notify Manager", key=f"notify_{index}", use_container_width=True):
-                                if row['contact'] != 'Not Available':
-                                    if send_oos_email(row['contact'], row['Brand'], row['SKU'], row['Pin Code'], row['Stock_Left']): st.toast(f"✅ Email sent to {row['contact']}!"); st.session_state.resolved_oos.add(row.name); st.rerun()
-                                else: st.warning("No manager email available.")
-                        st.markdown('</div>', unsafe_allow_html=True)
-        
-        with tab5:
-            st.header("Open the Live E-Commerce Dashboard"); POWER_BI_URL = "https.powerbi.com/groups/me/reports/4d9f2e70-e22d-464c-a997-355c8559558e/4f5955ee3b04ded7b3da?experience=power-bi"
-            st.markdown(f'<a href="{POWER_BI_URL}" target="_blank" style="display: inline-block; padding: 12px 20px; background-color: #1a73e8; color: white; text-align: center; text-decoration: none; font-size: 16px; border-radius: 5px;">🔗 Open Secure Power BI Report</a>', unsafe_allow_html=True)
-
-    except FileNotFoundError as e:
-        # Now gives a more helpful error message
-        st.error(f"File not found: {e.filename}. Please make sure 'demo.xlsx' is in the same folder as the app.")
-    except Exception as e:
-        st.error(f"An unexpected error occurred: {e}")
+                    with st.container(): st.markdown('<div class="issue-card">', unsafe_allow_html=True); col1, col2 = st.columns([3, 1]); col1.subheader(f"Brand: {row.get('Brand', 'N/A')} | SKU: {row.get('SKU', 'N/A')}"); col1.text(f"Platform: {row.get('Platform', 'N/A')} | Pin Code: {row.get('Pin Code', 'N/A')} | Date: {row['Date'].strftime('%Y-%m-%d')}"); col1.error(f"**Flag Type:** {row.get('Typ
