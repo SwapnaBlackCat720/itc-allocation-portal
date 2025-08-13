@@ -1,4 +1,4 @@
-# app.py (v51 - FINAL, HIGH-PERFORMANCE OPTIMIZATION)
+# app.py (v52 - FINAL, ALL FEATURES RESTORED, HIGH-PERFORMANCE)
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -53,16 +53,8 @@ def get_allocation_recommendations(df, budget_multiplier, roas_weight):
     features = grouping_keys; X = df_agg[features]; y = df_agg['Optimization_Score']
     for col in features: X[col] = X[col].astype("category")
     lgb_data = lgb.Dataset(X, label=y, categorical_feature=features)
-    
-    # <<< --- PERFORMANCE TUNING: Even faster model parameters --- >>>
-    params = {
-        "objective": "regression_l1", "metric": "rmse", "verbosity": -1, "seed": 42,
-        "n_estimators": 80,       # Reduced training rounds further
-        "num_leaves": 15,         # Further reduced complexity
-        "learning_rate": 0.1
-    }
+    params = {"objective": "regression_l1", "metric": "rmse", "verbosity": -1, "seed": 42, "n_estimators": 80, "num_leaves": 15, "learning_rate": 0.1}
     model = lgb.train(params, lgb_data)
-    
     df_agg['Predicted_Score'] = model.predict(X).clip(min=0)
     current_total_budget = df_agg['Budget Spent'].sum(); new_total_budget = current_total_budget * budget_multiplier
     brand_sales = df_agg.groupby('Brand')['Direct Sales'].sum(); brand_proportions = brand_sales / max(1, brand_sales.sum()); brand_budgets = brand_proportions * new_total_budget
@@ -121,45 +113,75 @@ else:
         if st.sidebar.button("Logout"):
             st.session_state.clear(); st.rerun()
         
-        # <<< --- PERFORMANCE FIX: Pre-calculating issue lists ONCE and storing in session_state --- >>>
-        if 'issues_precalculated' not in st.session_state:
-            unresolved_issues = pd.DataFrame()
-            if all(col in original_df.columns for col in ['Date', 'Content Issue Flag']): 
-                df_copy = original_df.copy(); df_copy['Date'] = pd.to_datetime(df_copy['Date'], errors='coerce'); df_copy.dropna(subset=['Date'], inplace=True); end_date = df_copy['Date'].max(); start_date = end_date - timedelta(days=2); 
-                st.session_state.recent_issues = df_copy[(df_copy['Date'] >= start_date) & (df_copy['Content Issue Flag'].astype(str).str.lower() == 'yes')]
-            unresolved_oos = pd.DataFrame()
-            if all(col in oos_df.columns for col in ['Time', 'Stock_Left']):
-                df_oos_copy = oos_df.copy(); df_oos_copy['Parsed_Timestamp'] = pd.to_datetime(df_oos_copy['Time'].astype(str), errors='coerce'); df_oos_copy['Simulated_Timestamp'] = df_oos_copy['Parsed_Timestamp'].dt.time.apply(lambda t: datetime.combine(datetime.now().date(), t) if pd.notna(t) else pd.NaT)
-                time_filter = datetime.now() - timedelta(minutes=30)
-                st.session_state.recent_oos = df_oos_copy[(df_oos_copy['Simulated_Timestamp'] >= time_filter) & (df_oos_copy['Stock_Left'] <= 5)]
-            st.session_state.issues_precalculated = True
-
-        unresolved_issues_count = len(st.session_state.get('recent_issues', pd.DataFrame())[~st.session_state.get('recent_issues', pd.DataFrame()).index.isin(st.session_state.get('resolved_issues', set()))])
-        unresolved_oos_count = len(st.session_state.get('recent_oos', pd.DataFrame())[~st.session_state.get('recent_oos', pd.DataFrame()).index.isin(st.session_state.get('resolved_oos', set()))])
+        # --- Pre-calculation for Tab Badges ---
+        recent_issues = pd.DataFrame()
+        if all(col in original_df.columns for col in ['Date', 'Content Issue Flag']): df_copy = original_df.copy(); df_copy['Date'] = pd.to_datetime(df_copy['Date'], errors='coerce'); df_copy.dropna(subset=['Date'], inplace=True); end_date = df_copy['Date'].max(); start_date = end_date - timedelta(days=2); recent_issues = df_copy[(df_copy['Date'] >= start_date) & (df_copy['Content Issue Flag'].astype(str).str.lower() == 'yes')]
+        unresolved_issues_count = len(recent_issues[~recent_issues.index.isin(st.session_state.get('resolved_issues', set()))])
+        recent_oos = pd.DataFrame()
+        if all(col in oos_df.columns for col in ['Time', 'Stock_Left']):
+            df_oos_copy = oos_df.copy(); df_oos_copy['Parsed_Timestamp'] = pd.to_datetime(df_oos_copy['Time'].astype(str), errors='coerce'); df_oos_copy['Simulated_Timestamp'] = df_oos_copy['Parsed_Timestamp'].dt.time.apply(lambda t: datetime.combine(datetime.now().date(), t) if pd.notna(t) else pd.NaT)
+            time_filter = datetime.now() - timedelta(minutes=30)
+            recent_oos = df_oos_copy[(df_oos_copy['Simulated_Timestamp'] >= time_filter) & (df_oos_copy['Stock_Left'] <= 5)]
+        unresolved_oos_count = len(recent_oos[~recent_oos.index.isin(st.session_state.get('resolved_oos', set()))])
         
         tab1, tab2, tab3, tab4, tab5 = st.tabs(["📊 Predictive Allocation", "📋 Raw Data", f"🚨 Content Issues ({unresolved_issues_count})", f"📉 Low Stock Alerts ({unresolved_oos_count})", "🌐 ITC E-COMMERCE"])
         
-        # (The rest of the app UI is unchanged and complete)
         with tab1:
             if 'final_df' in st.session_state:
-                final_df = st.session_state.final_df; st.expander("🔍 Filter Dashboard Results", expanded=True); col1, col2, col3, col4, col5 = st.columns(5); brands = sorted(final_df['Brand'].unique()); selected_brands = col1.multiselect("Brand", brands, default=brands); platforms = sorted(final_df['Platform'].unique()); selected_platforms = col2.multiselect("Platform", platforms, default=platforms); ad_types = sorted(final_df['Ad Type'].unique()); selected_ad_types = col3.multiselect("Ad Type", ad_types, default=ad_types); tiers = sorted(final_df['Tier'].unique()); selected_tiers = col4.multiselect("Tier", tiers, default=tiers); time_slots = sorted(final_df['Time Slot'].unique()); selected_slots = col5.multiselect("Time Slot", time_slots, default=time_slots)
+                final_df = st.session_state.final_df
+                with st.expander("🔍 Filter Dashboard Results", expanded=True):
+                    col1, col2, col3, col4, col5 = st.columns(5); brands = sorted(final_df['Brand'].unique()); selected_brands = col1.multiselect("Brand", brands, default=brands); platforms = sorted(final_df['Platform'].unique()); selected_platforms = col2.multiselect("Platform", platforms, default=platforms); ad_types = sorted(final_df['Ad Type'].unique()); selected_ad_types = col3.multiselect("Ad Type", ad_types, default=ad_types); tiers = sorted(final_df['Tier'].unique()); selected_tiers = col4.multiselect("Tier", tiers, default=tiers); time_slots = sorted(final_df['Time Slot'].unique()); selected_slots = col5.multiselect("Time Slot", time_slots, default=time_slots)
                 filtered_df = final_df[(final_df['Brand'].isin(selected_brands)) & (final_df['Platform'].isin(selected_platforms)) & (final_df['Ad Type'].isin(selected_ad_types)) & (final_df['Tier'].isin(selected_tiers)) & (final_df['Time Slot'].isin(selected_slots))]; st.header("Financial Summary"); kpi_cols = st.columns(3); original_budget = filtered_df['Budget Spent'].sum(); new_budget = filtered_df['Final_Allocated_Budget'].sum(); sales = filtered_df['Direct Sales'].sum(); kpi_cols[0].metric("Original Budget", f"${original_budget:,.0f}"); kpi_cols[1].metric("Optimized Budget", f"${new_budget:,.0f}", f"{(new_budget - original_budget):,.0f}"); kpi_cols[2].metric("Historical Sales", f"${sales:,.0f}"); st.markdown("---"); st.header("Allocation Visualizations"); viz_cols = st.columns(2); brand_summary = filtered_df.groupby('Brand')['Final_Allocated_Budget'].sum().sort_values(ascending=False); fig_brand = px.bar(brand_summary, x=brand_summary.index, y='Final_Allocated_Budget', title="Optimized Budget by Brand", labels={'Final_Allocated_Budget': 'Budget ($)', 'index': 'Brand'}, text_auto='.2s'); fig_brand.update_traces(textposition='outside'); viz_cols[0].plotly_chart(fig_brand, use_container_width=True)
                 platform_summary = filtered_df.groupby('Platform')['Final_Allocated_Budget'].sum(); fig_platform = px.pie(platform_summary, values='Final_Allocated_Budget', names=platform_summary.index, title="Optimized Budget by Platform", hole=.3); viz_cols[1].plotly_chart(fig_platform, use_container_width=True)
+                
+                # <<< --- RESTORED AI INSIGHTS SECTION --- >>>
+                st.markdown("---"); st.header("💡 Key AI Insights")
+                if not filtered_df.empty and filtered_df['Direct Sales'].sum() > 0:
+                    total_sales = filtered_df['Direct Sales'].sum(); total_new_budget = filtered_df['Final_Allocated_Budget'].sum()
+                    insight_df = filtered_df.groupby(['Brand', 'Platform']).agg(Historical_Sales=('Direct Sales', 'sum'), Allocated_Budget=('Final_Allocated_Budget', 'sum')).reset_index()
+                    insight_df['Sales_Share'] = insight_df['Historical_Sales'] / total_sales; insight_df['Budget_Share'] = insight_df['Allocated_Budget'] / total_new_budget
+                    insight_df['Lift'] = insight_df['Budget_Share'] / (insight_df['Sales_Share'] + 1e-9)
+                    hidden_gem = insight_df[insight_df['Allocated_Budget'] > 0].nlargest(1, 'Lift')
+                    overpriced_performer = insight_df[insight_df['Historical_Sales'] > 0].nsmallest(1, 'Lift')
+                    if roas_w >= 0.7: strategy = "to **maximize short-term profitability** by focusing on segments with the highest proven ROAS."
+                    elif roas_w <= 0.3: strategy = "for **aggressive customer acquisition** by prioritizing segments with high New-to-Brand (NTB) percentages."
+                    else: strategy = "for **balanced growth**, giving equal importance to both profitability (ROAS) and customer acquisition (NTB)."
+                    st.markdown(f"- **Strategy Focus:** The current weights configure the AI {strategy}")
+                    if not hidden_gem.empty: gem_row = hidden_gem.iloc[0]; st.markdown(f"- **Hidden Gem:** The model identified **{gem_row['Brand']} on {gem_row['Platform']}** as a key growth opportunity. It received **{gem_row['Budget_Share']:.1%}** of the budget, a significant increase from its historical sales contribution of {gem_row['Sales_Share']:.1%}.")
+                    if not overpriced_performer.empty: op_row = overpriced_performer.iloc[0]; st.markdown(f"- **Efficiency Optimization:** While **{op_row['Brand']} on {op_row['Platform']}** was a strong historical performer ({op_row['Sales_Share']:.1%} of sales), the model suggests it has reached diminishing returns, allocating it a smaller budget share ({op_row['Budget_Share']:.1%}).")
+                
+                # <<< --- RESTORED CONTENT FLAG GRAPHS --- >>>
+                st.markdown("---"); st.header("Operational Health Summary (Last 3 Days)")
+                if not recent_issues.empty:
+                    unresolved_issues_df = recent_issues[~recent_issues.index.isin(st.session_state.get('resolved_issues', set()))]
+                    if not unresolved_issues_df.empty:
+                        issue_viz_cols = st.columns(2)
+                        with issue_viz_cols[0]:
+                            brand_counts = unresolved_issues_df['Brand'].value_counts(); fig_brand_issues = px.pie(brand_counts, values=brand_counts.values, names=brand_counts.index, title="Content Issues by Brand", hole=0.4); st.plotly_chart(fig_brand_issues, use_container_width=True)
+                        with issue_viz_cols[1]:
+                            pincode_counts = unresolved_issues_df['Pin Code'].value_counts().nlargest(10); fig_pincode_issues = px.pie(pincode_counts, values=pincode_counts.values, names=pincode_counts.index, title="Top 10 Pin Codes with Issues", hole=0.4); st.plotly_chart(fig_pincode_issues, use_container_width=True)
+                    else:
+                        st.success("✅ No unresolved content issues found in the last 3 days.")
+                else:
+                    st.success("✅ No content issues found in the last 3 days.")
             else: st.info("Click 'Run' to generate an allocation.")
+        
         with tab2:
             if 'final_df' in st.session_state: st.header("Full Allocation Details"); st.dataframe(st.session_state.final_df); st.download_button("📥 Download Full Data", to_csv(st.session_state.final_df), "full_alloc.csv")
             else: st.info("Run an allocation to see data.")
+        
         with tab3:
             st.header("Action Center: Content Issue Flags"); st.markdown("Unresolved items from the **last 3 days**.");
             if st.button("🔄 Reset Resolved List"): st.session_state.resolved_issues = set(); st.toast("Resolved list cleared."); st.rerun()
             st.metric("Unresolved Issues", unresolved_issues_count); st.markdown("---")
             if unresolved_issues_count == 0: st.success("✅ All Clear!")
             else:
-                unresolved_issues_df = st.session_state.recent_issues[~st.session_state.recent_issues.index.isin(st.session_state.get('resolved_issues', set()))]
-                for index, row in unresolved_issues_df.iterrows():
+                unresolved_issues_df_cards = recent_issues[~recent_issues.index.isin(st.session_state.get('resolved_issues', set()))]
+                for index, row in unresolved_issues_df_cards.iterrows():
                     with st.container(): st.markdown('<div class="issue-card">', unsafe_allow_html=True); col1, col2 = st.columns([3, 1]); col1.subheader(f"Brand: {row.get('Brand', 'N/A')} | SKU: {row.get('SKU', 'N/A')}"); col1.text(f"Platform: {row.get('Platform', 'N/A')} | Pin Code: {row.get('Pin Code', 'N/A')} | Date: {row['Date'].strftime('%Y-%m-%d')}"); col1.error(f"**Flag Type:** {row.get('Type of Flag', 'Unknown')}")
                     if col2.button("✔️ Mark as Resolved", key=f"resolve_{index}", use_container_width=True): st.session_state.resolved_issues.add(index); st.rerun()
                     st.markdown('</div>', unsafe_allow_html=True)
+        
         with tab4:
             st.header("Action Center: Low Stock Alerts"); st.markdown("Displays items with **Stock <= 5** in the **last 30 minutes**.")
             if st.button("🔄 Reset Low Stock List"): st.session_state.resolved_oos = set(); st.toast("Resolved list cleared."); st.rerun()
@@ -167,8 +189,8 @@ else:
             if unresolved_oos_count == 0:
                 st.success("✅ No recent low stock issues found.")
             else:
-                unresolved_oos_df = st.session_state.recent_oos[~st.session_state.recent_oos.index.isin(st.session_state.get('resolved_oos', set()))]
-                oos_with_managers = pd.merge(unresolved_oos_df, manager_df, on='Pin Code', how='left'); oos_with_managers['contact'].fillna('Not Available', inplace=True)
+                unresolved_oos_df_cards = recent_oos[~recent_oos.index.isin(st.session_state.get('resolved_oos', set()))]
+                oos_with_managers = pd.merge(unresolved_oos_df_cards, manager_df, on='Pin Code', how='left'); oos_with_managers['contact'].fillna('Not Available', inplace=True)
                 for index, row in oos_with_managers.iterrows():
                     with st.container():
                         st.markdown('<div class="issue-card" style="border-color: #fca130; border-left-color: #fca130; background-color: #fffaf0;">', unsafe_allow_html=True); col1, col2 = st.columns([3, 1])
@@ -179,6 +201,7 @@ else:
                                     if send_oos_email(row['contact'], row['Brand'], row['SKU'], row['Pin Code'], row['Stock_Left']): st.toast(f"✅ Email sent to {row['contact']}!"); st.session_state.resolved_oos.add(row.name); st.rerun()
                                 else: st.warning("No manager email available.")
                         st.markdown('</div>', unsafe_allow_html=True)
+        
         with tab5:
             st.header("Open the Live E-Commerce Dashboard"); POWER_BI_URL = "https://app.powerbi.com/groups/me/reports/4d9f2e70-e22d-464c-a997-355c8559558e/4f5955ee3b04ded7b3da?experience=power-bi"
             st.markdown(f'<a href="{POWER_BI_URL}" target="_blank" style="display: inline-block; padding: 12px 20px; background-color: #1a73e8; color: white; text-align: center; text-decoration: none; font-size: 16px; border-radius: 5px;">🔗 Open Secure Power BI Report</a>', unsafe_allow_html=True)
