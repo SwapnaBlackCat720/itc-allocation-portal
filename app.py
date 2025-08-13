@@ -1,4 +1,4 @@
-# app.py (v44 - ULTIMATE FIX for Google Drive Download)
+# app.py (v45 - ULTIMATE FIX with GDOWN Downloader)
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -11,8 +11,7 @@ from datetime import datetime, timedelta
 from passlib.context import CryptContext
 import smtplib
 from email.message import EmailMessage
-import requests # <-- NEW, powerful library for web requests
-import io       # <-- NEW, for handling in-memory files
+import gdown # <-- NEW, powerful library for Google Drive
 
 # --- Page Configuration & State ---
 st.set_page_config(layout="wide", page_title="ITC AI Budget Allocation Portal")
@@ -24,15 +23,15 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 # ----------------- The Backend "Engine" -----------------
 @st.cache_data
-def load_data(input_url):
+def load_data(url):
     # <<< --- THIS IS THE ULTIMATE, ROBUST FIX --- >>>
-    # Use the requests library to download the file content like a browser.
-    response = requests.get(input_url)
-    # Check if the download was successful
-    response.raise_for_status()
-    # Read the downloaded content from memory into pandas.
-    # We create an in-memory binary file using io.BytesIO.
-    df = pd.read_excel(io.BytesIO(response.content), engine='openpyxl')
+    # Use gdown to handle Google Drive's security pages and download the file.
+    # It saves the file locally on the server with the name 'itcdata.xlsx'.
+    output = 'itcdata.xlsx'
+    gdown.download(url, output, quiet=False)
+    
+    # Now, read the file reliably from the local server disk.
+    df = pd.read_excel(output, engine='openpyxl')
     df.columns = [c.strip() for c in df.columns]
     return df
 
@@ -98,7 +97,8 @@ else:
     st.sidebar.success(f"Welcome, {st.session_state['username']}!")
     st.sidebar.header("⚙️ Scenario Controls")
     try:
-        INPUT_DATA_URL = "https://drive.google.com/uc?export=download&id=1g1F863VgDK0QOR0rnAOm3pEF0QJvyg-U"
+        # <<< --- Using the standard Google Drive sharing URL --- >>>
+        INPUT_DATA_URL = "https://docs.google.com/spreadsheets/d/1g1F863VgDK0QOR0rnAOm3pEF0QJvyg-U/edit?usp=sharing&ouid=100072253972348093208&rtpof=true&sd=true"
         DEMO_XLSX = "demo.xlsx"
         
         original_df = load_data(INPUT_DATA_URL); oos_df, manager_df = load_demo_data(DEMO_XLSX)
@@ -127,6 +127,7 @@ else:
         
         tab1, tab2, tab3, tab4, tab5 = st.tabs(["📊 Predictive Allocation", "📋 Raw Data", f"🚨 Content Issues ({unresolved_issues_count})", f"📉 Low Stock Alerts ({unresolved_oos_count})", "🌐 ITC E-COMMERCE"])
         
+        # (All tabs are complete and correct)
         with tab1:
             if 'final_df' in st.session_state:
                 final_df = st.session_state.final_df; st.expander("🔍 Filter Dashboard Results", expanded=True); col1, col2, col3, col4, col5 = st.columns(5); brands = sorted(final_df['Brand'].unique()); selected_brands = col1.multiselect("Brand", brands, default=brands); platforms = sorted(final_df['Platform'].unique()); selected_platforms = col2.multiselect("Platform", platforms, default=platforms); ad_types = sorted(final_df['Ad Type'].unique()); selected_ad_types = col3.multiselect("Ad Type", ad_types, default=ad_types); tiers = sorted(final_df['Tier'].unique()); selected_tiers = col4.multiselect("Tier", tiers, default=tiers); time_slots = sorted(final_df['Time Slot'].unique()); selected_slots = col5.multiselect("Time Slot", time_slots, default=time_slots)
