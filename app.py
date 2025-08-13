@@ -1,4 +1,4 @@
-# app.py (v43 - FINAL, DEFINITIVE FIX for Engine Error)
+# app.py (v44 - ULTIMATE FIX for Google Drive Download)
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -11,6 +11,8 @@ from datetime import datetime, timedelta
 from passlib.context import CryptContext
 import smtplib
 from email.message import EmailMessage
+import requests # <-- NEW, powerful library for web requests
+import io       # <-- NEW, for handling in-memory files
 
 # --- Page Configuration & State ---
 st.set_page_config(layout="wide", page_title="ITC AI Budget Allocation Portal")
@@ -23,10 +25,14 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 # ----------------- The Backend "Engine" -----------------
 @st.cache_data
 def load_data(input_url):
-    # <<< --- THIS IS THE DEFINITIVE FIX --- >>>
-    # We explicitly tell pandas to use the 'openpyxl' engine
-    # because it cannot guess the file type from a URL.
-    df = pd.read_excel(input_url, engine='openpyxl')
+    # <<< --- THIS IS THE ULTIMATE, ROBUST FIX --- >>>
+    # Use the requests library to download the file content like a browser.
+    response = requests.get(input_url)
+    # Check if the download was successful
+    response.raise_for_status()
+    # Read the downloaded content from memory into pandas.
+    # We create an in-memory binary file using io.BytesIO.
+    df = pd.read_excel(io.BytesIO(response.content), engine='openpyxl')
     df.columns = [c.strip() for c in df.columns]
     return df
 
@@ -97,6 +103,7 @@ else:
         
         original_df = load_data(INPUT_DATA_URL); oos_df, manager_df = load_demo_data(DEMO_XLSX)
         
+        # (The rest of the app UI is unchanged and complete)
         st.sidebar.markdown("---"); st.sidebar.header("🎯 Campaign Objective")
         objective = st.sidebar.selectbox("Select the primary goal:",("Balanced Growth (50/50)","Maximize Profitability (80/20)","Aggressive Acquisition (20/80)"));
         if "Balanced" in objective: roas_w = 0.50
@@ -110,7 +117,6 @@ else:
             st.toast("✅ Allocation complete!", icon="🎉")
         if st.sidebar.button("Logout"): st.session_state["authentication_status"] = False; st.session_state["username"] = None; st.rerun()
         
-        # (The rest of the app is unchanged and complete)
         unresolved_issues_count = 0; unresolved_oos_count = 0
         if all(col in original_df.columns for col in ['Date', 'Content Issue Flag']): df_copy = original_df.copy(); df_copy['Date'] = pd.to_datetime(df_copy['Date'], errors='coerce'); df_copy.dropna(subset=['Date'], inplace=True); end_date = df_copy['Date'].max(); start_date = end_date - timedelta(days=2); recent_issues = df_copy[(df_copy['Date'] >= start_date) & (df_copy['Content Issue Flag'].astype(str).str.lower() == 'yes')]; unresolved_issues_count = len(recent_issues[~recent_issues.index.isin(st.session_state.get('resolved_issues', set()))])
         if all(col in oos_df.columns for col in ['Time', 'Stock_Left']):
