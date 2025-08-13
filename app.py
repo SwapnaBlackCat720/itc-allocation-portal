@@ -1,4 +1,4 @@
-# app.py (v42 - FINAL, CORRECTED Google Drive Link)
+# app.py (v43 - FINAL, DEFINITIVE FIX for Engine Error)
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -23,8 +23,10 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 # ----------------- The Backend "Engine" -----------------
 @st.cache_data
 def load_data(input_url):
-    # <<< FIX: Now reads the Excel file directly from the Google Drive download link
-    df = pd.read_excel(input_url)
+    # <<< --- THIS IS THE DEFINITIVE FIX --- >>>
+    # We explicitly tell pandas to use the 'openpyxl' engine
+    # because it cannot guess the file type from a URL.
+    df = pd.read_excel(input_url, engine='openpyxl')
     df.columns = [c.strip() for c in df.columns]
     return df
 
@@ -90,7 +92,6 @@ else:
     st.sidebar.success(f"Welcome, {st.session_state['username']}!")
     st.sidebar.header("⚙️ Scenario Controls")
     try:
-        # <<< --- GITHUB-READY FIX: Using the CORRECT Google Drive download link --- >>>
         INPUT_DATA_URL = "https://drive.google.com/uc?export=download&id=1g1F863VgDK0QOR0rnAOm3pEF0QJvyg-U"
         DEMO_XLSX = "demo.xlsx"
         
@@ -145,7 +146,8 @@ else:
             st.header("Action Center: Low Stock Alerts"); st.markdown("Displays items with **Stock <= 5** in the **last 30 minutes**.")
             if st.button("🔄 Reset Low Stock List"): st.session_state.resolved_oos = set(); st.toast("Resolved list cleared."); st.rerun()
             st.metric("Actionable Low Stock Alerts", unresolved_oos_count); st.markdown("---")
-            if unresolved_oos_count == 0: st.success("✅ No recent low stock issues found.")
+            if unresolved_oos_count == 0:
+                st.success("✅ No recent low stock issues found.")
             else:
                 unresolved_oos_df = recent_oos[~recent_oos.index.isin(st.session_state.get('resolved_oos', set()))]
                 oos_with_managers = pd.merge(unresolved_oos_df, manager_df, on='Pin Code', how='left'); oos_with_managers['contact'].fillna('Not Available', inplace=True)
@@ -164,6 +166,6 @@ else:
             st.markdown(f'<a href="{POWER_BI_URL}" target="_blank" style="display: inline-block; padding: 12px 20px; background-color: #1a73e8; color: white; text-align: center; text-decoration: none; font-size: 16px; border-radius: 5px;">🔗 Open Secure Power BI Report</a>', unsafe_allow_html=True)
 
     except FileNotFoundError as e:
-        st.error(f"File not found: {e.filename}. Please make sure 'demo.xlsx' is in the same folder as the app.")
+        st.error(f"File not found: {e.filename}. Please make sure 'demo.xlsx' is in the same folder as the app and the Google Sheet link is correct.")
     except Exception as e:
         st.error(f"An unexpected error occurred: {e}")
