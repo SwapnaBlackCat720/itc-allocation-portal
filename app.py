@@ -1,4 +1,4 @@
- # app.py (v61 - DEFINITIVE PROFESSIONAL UI)
+ # app.py (v62 - IMPROVED FILTER UI)
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -137,11 +137,29 @@ else:
         with tab1:
             if 'final_df' in st.session_state:
                 final_df = st.session_state.final_df
-                # <<< --- UI OVERHAUL: Using st.expander for a clean filter UI --- >>>
+                # <<< --- UI IMPROVEMENT: Using a 2-row grid for filters for better alignment --- >>>
                 with st.expander("🔍 Filter Dashboard Results", expanded=True):
-                    col1, col2, col3, col4, col5 = st.columns(5)
-                    brands = sorted(final_df['Brand'].unique()); selected_brands = col1.multiselect("Brand", brands, default=brands); platforms = sorted(final_df['Platform'].unique()); selected_platforms = col2.multiselect("Platform", platforms, default=platforms); ad_types = sorted(final_df['Ad Type'].unique()); selected_ad_types = col3.multiselect("Ad Type", ad_types, default=ad_types); tiers = sorted(final_df['Tier'].unique()); selected_tiers = col4.multiselect("Tier", tiers, default=tiers); time_slots = sorted(final_df['Time Slot'].unique()); selected_slots = col5.multiselect("Time Slot", time_slots, default=time_slots)
-                
+                    # --- Row 1: Brand, Platform, Ad Type ---
+                    r1_col1, r1_col2, r1_col3 = st.columns(3)
+                    with r1_col1:
+                        brands = sorted(final_df['Brand'].unique())
+                        selected_brands = st.multiselect("Brand", brands, default=brands)
+                    with r1_col2:
+                        platforms = sorted(final_df['Platform'].unique())
+                        selected_platforms = st.multiselect("Platform", platforms, default=platforms)
+                    with r1_col3:
+                        ad_types = sorted(final_df['Ad Type'].unique())
+                        selected_ad_types = st.multiselect("Ad Type", ad_types, default=ad_types)
+                    
+                    # --- Row 2: Tier, Time Slot ---
+                    r2_col1, r2_col2, r2_col3 = st.columns(3) # Using 3 columns to align with the row above
+                    with r2_col1:
+                        tiers = sorted(final_df['Tier'].unique())
+                        selected_tiers = st.multiselect("Tier", tiers, default=tiers)
+                    with r2_col2:
+                        time_slots = sorted(final_df['Time Slot'].unique())
+                        selected_slots = st.multiselect("Time Slot", time_slots, default=time_slots)
+
                 filtered_df = final_df[(final_df['Brand'].isin(selected_brands)) & (final_df['Platform'].isin(selected_platforms)) & (final_df['Ad Type'].isin(selected_ad_types)) & (final_df['Tier'].isin(selected_tiers)) & (final_df['Time Slot'].isin(selected_slots))]
                 
                 # (The rest of the tab content is unchanged and correct)
