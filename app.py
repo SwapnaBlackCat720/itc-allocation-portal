@@ -1,4 +1,4 @@
-# app.py (v58 - FINAL, PROFESSIONAL UI OVERHAUL)
+# app.py (v59 - DEFINITIVE, ALL FEATURES RESTORED, PROFESSIONAL UI)
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -38,7 +38,7 @@ st.markdown("""
         margin-bottom: 20px;
     }
     /* Style headers */
-    h1, h2, h3 {
+    h1, h2, h3, h4, h5, h6 {
         color: #1E293B;
     }
     /* Style the sidebar */
@@ -161,7 +161,7 @@ else:
                 # <<< --- UI OVERHAUL: KPIs in a Card --- >>>
                 st.markdown('<div class="card">', unsafe_allow_html=True)
                 st.subheader("Financial Summary")
-                kpi_cols = st.columns(3); original_budget = filtered_df['Budget Spent'].sum(); new_budget = filtered_df['Final_Allocated_Budget'].sum(); sales = filtered_df['Direct Sales'].sum(); kpi_cols[0].metric("Original Budget", f"₹{original_budget:,.0f}"); kpi_cols[1].metric("Optimized Budget", f"₹{new_budget:,.0f}", f"{((new_budget/original_budget)-1):.1%}"); kpi_cols[2].metric("Historical Sales", f"₹{sales:,.0f}")
+                kpi_cols = st.columns(3); original_budget = filtered_df['Budget Spent'].sum(); new_budget = filtered_df['Final_Allocated_Budget'].sum(); sales = filtered_df['Direct Sales'].sum(); kpi_cols[0].metric("Original Budget", f"₹{original_budget:,.0f}"); kpi_cols[1].metric("Optimized Budget", f"₹{new_budget:,.0f}", f"{((new_budget/max(1, original_budget))-1):.1%}"); kpi_cols[2].metric("Historical Sales", f"₹{sales:,.0f}")
                 st.markdown('</div>', unsafe_allow_html=True)
                 
                 # <<< --- UI OVERHAUL: Charts in a Card --- >>>
@@ -171,7 +171,31 @@ else:
                 platform_summary = filtered_df.groupby('Platform')['Final_Allocated_Budget'].sum(); fig_platform = px.pie(platform_summary, values='Final_Allocated_Budget', names=platform_summary.index, title="Optimized Budget by Platform", hole=.3); viz_cols[1].plotly_chart(fig_platform, use_container_width=True)
                 st.markdown('</div>', unsafe_allow_html=True)
 
-                # (Insights and Ops Health sections are unchanged but will now appear in cards)
+                # <<< --- RESTORED: Key AI Insights in a Card --- >>>
+                st.markdown('<div class="card">', unsafe_allow_html=True)
+                st.subheader("💡 Key AI Insights")
+                if not filtered_df.empty and filtered_df['Direct Sales'].sum() > 0:
+                    total_sales = filtered_df['Direct Sales'].sum(); total_new_budget = filtered_df['Final_Allocated_Budget'].sum(); insight_df = filtered_df.groupby(['Brand', 'Platform']).agg(Historical_Sales=('Direct Sales', 'sum'), Allocated_Budget=('Final_Allocated_Budget', 'sum')).reset_index(); insight_df['Sales_Share'] = insight_df['Historical_Sales'] / total_sales; insight_df['Budget_Share'] = insight_df['Allocated_Budget'] / total_new_budget; insight_df['Lift'] = insight_df['Budget_Share'] / (insight_df['Sales_Share'] + 1e-9); hidden_gem = insight_df[insight_df['Allocated_Budget'] > 0].nlargest(1, 'Lift'); overpriced_performer = insight_df[insight_df['Historical_Sales'] > 0].nsmallest(1, 'Lift')
+                    if roas_w >= 0.7: strategy = "to **maximize short-term profitability**."
+                    elif roas_w <= 0.3: strategy = "for **aggressive customer acquisition**."
+                    else: strategy = "for **balanced growth**."
+                    st.markdown(f"- **Strategy Focus:** The current weights configure the AI {strategy}")
+                    if not hidden_gem.empty: gem_row = hidden_gem.iloc[0]; st.markdown(f"- **Hidden Gem:** The model identified **{gem_row['Brand']} on {gem_row['Platform']}** as a key growth opportunity.")
+                    if not overpriced_performer.empty: op_row = overpriced_performer.iloc[0]; st.markdown(f"- **Efficiency Optimization:** While **{op_row['Brand']} on {op_row['Platform']}** was a strong historical performer, the model suggests reallocating some budget to more efficient areas.")
+                st.markdown('</div>', unsafe_allow_html=True)
+
+                # <<< --- RESTORED: Operational Health Charts in a Card --- >>>
+                st.markdown('<div class="card">', unsafe_allow_html=True)
+                st.subheader("Operational Health Summary (Last 3 Days)")
+                if not recent_issues.empty:
+                    unresolved_issues_df = recent_issues[~recent_issues.index.isin(st.session_state.get('resolved_issues', set()))]
+                    if not unresolved_issues_df.empty:
+                        issue_viz_cols = st.columns(2)
+                        with issue_viz_cols[0]: brand_counts = unresolved_issues_df['Brand'].value_counts(); fig_brand_issues = px.pie(brand_counts, values=brand_counts.values, names=brand_counts.index, title="Content Issues by Brand", hole=0.4); st.plotly_chart(fig_brand_issues, use_container_width=True)
+                        with issue_viz_cols[1]: pincode_counts = unresolved_issues_df['Pin Code'].value_counts().nlargest(10); fig_pincode_issues = px.pie(pincode_counts, values=pincode_counts.values, names=pincode_counts.index, title="Top 10 Pin Codes with Issues", hole=0.4); st.plotly_chart(fig_pincode_issues, use_container_width=True)
+                    else: st.success("✅ No unresolved content issues found in the last 3 days.")
+                else: st.success("✅ No content issues found in the last 3 days.")
+                st.markdown('</div>', unsafe_allow_html=True)
             else:
                 st.info("Adjust settings in the sidebar and click 'Run' to generate an allocation.")
         
