@@ -1,4 +1,4 @@
-# app.py (v63 - DEFINITIVE, ALL FEATURES RESTORED, UI FIXED)
+ # app.py (v61 - DEFINITIVE PROFESSIONAL UI)
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -12,7 +12,6 @@ from passlib.context import CryptContext
 import smtplib
 from email.message import EmailMessage
 import time
-import google.generativeai as genai
 
 # --- Page Configuration & State ---
 st.set_page_config(layout="wide", page_title="ITC AI Budget Allocation Portal")
@@ -22,16 +21,30 @@ if 'resolved_oos' not in st.session_state: st.session_state.resolved_oos = set()
 # --- Hashing Context ---
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
-# --- CUSTOM CSS FOR PROFESSIONAL UI (Unchanged) ---
+# --- CUSTOM CSS FOR A CLEANER LOOK ---
 st.markdown("""
 <style>
-    .main .block-container { padding: 1rem 3rem 2rem; }
-    .card { border: 1px solid #E6E9EF; border-radius: 10px; padding: 25px; background-color: white; box-shadow: 0 4px 12px 0 rgba(0,0,0,0.05); margin-bottom: 20px; }
-    h1, h2, h3, h4, h5, h6 { color: #1E293B; }
-    .st-emotion-cache-16txtl3 { padding: 1.5rem 1.2rem; background-color: #FFFFFF; }
-    .issue-card { border: 1px solid #ff4b4b; border-left: 5px solid #ff4b4b; border-radius: 5px; padding: 1rem; margin-bottom: 1rem; background-color: #fff6f6; }
+    .main .block-container {
+        padding: 1rem 3rem 2rem;
+    }
+    h1, h2, h3, h4, h5, h6 {
+        color: #1E293B;
+    }
+    .st-emotion-cache-16txtl3 {
+        padding: 1.5rem 1.2rem;
+        background-color: #FFFFFF;
+    }
+    .issue-card {
+        border: 1px solid #ff4b4b;
+        border-left: 5px solid #ff4b4b;
+        border-radius: 5px;
+        padding: 1rem;
+        margin-bottom: 1rem;
+        background-color: #fff6f6;
+    }
 </style>
 """, unsafe_allow_html=True)
+
 
 # ----------------- The Backend "Engine" (Unchanged) -----------------
 @st.cache_data
@@ -59,26 +72,6 @@ def get_allocation_recommendations(df, budget_multiplier, roas_weight):
     df_agg['Predicted_Score'] = model.predict(X).clip(min=0); current_total_budget = df_agg['Budget Spent'].sum(); new_total_budget = current_total_budget * budget_multiplier; brand_sales = df_agg.groupby('Brand')['Direct Sales'].sum(); brand_proportions = brand_sales / max(1, brand_sales.sum()); brand_budgets = brand_proportions * new_total_budget
     df_agg['Brand_Allocated_Budget'] = df_agg['Brand'].map(brand_budgets); df_agg['Brand_Total_Predicted_Score'] = df_agg.groupby('Brand')['Predicted_Score'].transform('sum'); df_agg['Final_Allocated_Budget'] = df_agg['Brand_Allocated_Budget'] * (df_agg['Predicted_Score'] / (df_agg['Brand_Total_Predicted_Score'] + 1e-6)); df_agg.fillna(0, inplace=True); df_agg['Final_Allocated_Budget'] = df_agg['Final_Allocated_Budget'] * (new_total_budget / max(1, df_agg['Final_Allocated_Budget'].sum()))
     return df_agg
-@st.cache_data
-def generate_llm_insights(_filtered_df, roas_weight): # Use underscore to prevent caching based on df object
-    try:
-        genai.configure(api_key=st.secrets["google_ai"]["api_key"])
-        model = genai.GenerativeModel('gemini-pro')
-        total_sales = _filtered_df['Direct Sales'].sum(); total_new_budget = _filtered_df['Final_Allocated_Budget'].sum()
-        insight_df = _filtered_df.groupby(['Brand', 'Platform']).agg(Historical_Sales=('Direct Sales', 'sum'), Allocated_Budget=('Final_Allocated_Budget', 'sum')).reset_index()
-        insight_df['Sales_Share'] = insight_df['Historical_Sales'] / total_sales; insight_df['Budget_Share'] = insight_df['Allocated_Budget'] / total_new_budget; insight_df['Lift'] = insight_df['Budget_Share'] / (insight_df['Sales_Share'] + 1e-9)
-        top_5_allocations = insight_df.nlargest(5, 'Allocated_Budget').to_string(index=False); hidden_gems = insight_df.nlargest(3, 'Lift').to_string(index=False)
-        if roas_w >= 0.7: strategy = "to maximize short-term profitability (high ROAS focus)."
-        elif roas_w <= 0.3: strategy = "for aggressive customer acquisition (high NTB focus)."
-        else: strategy = "for balanced growth (equal focus on ROAS and NTB)."
-        prompt = f"""You are an expert marketing strategy analyst for ITC. Analyze the following data from an AI budget allocation model.
-        **Strategic Goal:** {strategy}
-        **Top 5 Recommended Allocations:**\n{top_5_allocations}
-        **Top 3 Growth Opportunities (Highest Lift):**\n{hidden_gems}
-        **Your Analysis:** Provide a 3-bullet point strategic summary for an executive. What is the main strategy? What is the most interesting 'hidden gem' and why? What is a key takeaway? Be concise and insightful."""
-        response = model.generate_content(prompt); return response.text
-    except Exception as e:
-        return f"Could not generate AI insights. Error: {e}"
 def send_oos_email(manager_email, brand, sku, pincode, stock_left):
     try:
         sender = st.secrets["email_credentials"]["sender_email"]; password = st.secrets["email_credentials"]["sender_password"]; subject = f"🚨 URGENT: Low Stock Alert for {brand}"; body = f"Hello,\n\nThis is an automated alert.\n\nThe following item is running low on stock in your area:\n\n- Brand: {brand}\n- SKU: {sku}\n- Pin Code: {pincode}\n- Stock Left: {stock_left}\n\nPlease take action to restock.\n\nThank you,\nITC AI Operations Bot"
@@ -111,6 +104,7 @@ def login_form():
 if not st.session_state.get("authentication_status", False):
     login_form()
 else:
+    # --- Main App Header ---
     st.markdown("##### 📈 A Predictive Analytics Tool to Optimize Marketing Spend")
     st.title("ITC AI-Based Budget Allocation Portal")
     st.sidebar.success(f"Welcome, {st.session_state['username']}!")
@@ -130,6 +124,7 @@ else:
         if st.sidebar.button("Logout"):
             st.session_state.clear(); st.rerun()
         
+        # --- Pre-calculation for Tab Badges (Unchanged) ---
         recent_issues = pd.DataFrame(); unresolved_issues_count = 0; recent_oos = pd.DataFrame(); unresolved_oos_count = 0
         if all(col in original_df.columns for col in ['Date', 'Content Issue Flag']): df_copy = original_df.copy(); df_copy['Date'] = pd.to_datetime(df_copy['Date'], errors='coerce'); df_copy.dropna(subset=['Date'], inplace=True); end_date = df_copy['Date'].max(); start_date = end_date - timedelta(days=2); recent_issues = df_copy[(df_copy['Date'] >= start_date) & (df_copy['Content Issue Flag'].astype(str).str.lower() == 'yes')]; unresolved_issues_count = len(recent_issues[~recent_issues.index.isin(st.session_state.get('resolved_issues', set()))])
         if all(col in oos_df.columns for col in ['Time', 'Stock_Left']):
@@ -142,34 +137,28 @@ else:
         with tab1:
             if 'final_df' in st.session_state:
                 final_df = st.session_state.final_df
-                st.markdown('<div class="card">', unsafe_allow_html=True)
-                st.subheader("🔍 Filter Dashboard Results")
-                col1, col2, col3, col4, col5 = st.columns(5); brands = sorted(final_df['Brand'].unique()); selected_brands = col1.multiselect("Brand", brands, default=brands); platforms = sorted(final_df['Platform'].unique()); selected_platforms = col2.multiselect("Platform", platforms, default=platforms); ad_types = sorted(final_df['Ad Type'].unique()); selected_ad_types = col3.multiselect("Ad Type", ad_types, default=ad_types); tiers = sorted(final_df['Tier'].unique()); selected_tiers = col4.multiselect("Tier", tiers, default=tiers); time_slots = sorted(final_df['Time Slot'].unique()); selected_slots = col5.multiselect("Time Slot", time_slots, default=time_slots)
-                st.markdown('</div>', unsafe_allow_html=True)
+                # <<< --- UI OVERHAUL: Using st.expander for a clean filter UI --- >>>
+                with st.expander("🔍 Filter Dashboard Results", expanded=True):
+                    col1, col2, col3, col4, col5 = st.columns(5)
+                    brands = sorted(final_df['Brand'].unique()); selected_brands = col1.multiselect("Brand", brands, default=brands); platforms = sorted(final_df['Platform'].unique()); selected_platforms = col2.multiselect("Platform", platforms, default=platforms); ad_types = sorted(final_df['Ad Type'].unique()); selected_ad_types = col3.multiselect("Ad Type", ad_types, default=ad_types); tiers = sorted(final_df['Tier'].unique()); selected_tiers = col4.multiselect("Tier", tiers, default=tiers); time_slots = sorted(final_df['Time Slot'].unique()); selected_slots = col5.multiselect("Time Slot", time_slots, default=time_slots)
                 
                 filtered_df = final_df[(final_df['Brand'].isin(selected_brands)) & (final_df['Platform'].isin(selected_platforms)) & (final_df['Ad Type'].isin(selected_ad_types)) & (final_df['Tier'].isin(selected_tiers)) & (final_df['Time Slot'].isin(selected_slots))]
                 
-                st.markdown('<div class="card">', unsafe_allow_html=True)
+                # (The rest of the tab content is unchanged and correct)
                 st.subheader("Financial Summary")
                 kpi_cols = st.columns(3); original_budget = filtered_df['Budget Spent'].sum(); new_budget = filtered_df['Final_Allocated_Budget'].sum(); sales = filtered_df['Direct Sales'].sum(); kpi_cols[0].metric("Original Budget", f"₹{original_budget:,.0f}"); kpi_cols[1].metric("Optimized Budget", f"₹{new_budget:,.0f}", f"{((new_budget/max(1, original_budget))-1):.1%}"); kpi_cols[2].metric("Historical Sales", f"₹{sales:,.0f}")
-                st.markdown('</div>', unsafe_allow_html=True)
-                
-                st.markdown('<div class="card">', unsafe_allow_html=True)
                 st.subheader("Allocation Visualizations")
                 viz_cols = st.columns(2); brand_summary = filtered_df.groupby('Brand')['Final_Allocated_Budget'].sum().sort_values(ascending=False); fig_brand = px.bar(brand_summary, x=brand_summary.index, y='Final_Allocated_Budget', title="Optimized Budget by Brand", labels={'Final_Allocated_Budget': 'Budget (₹)', 'index': 'Brand'}, text_auto='.2s'); fig_brand.update_traces(textposition='outside'); viz_cols[0].plotly_chart(fig_brand, use_container_width=True)
                 platform_summary = filtered_df.groupby('Platform')['Final_Allocated_Budget'].sum(); fig_platform = px.pie(platform_summary, values='Final_Allocated_Budget', names=platform_summary.index, title="Optimized Budget by Platform", hole=.3); viz_cols[1].plotly_chart(fig_platform, use_container_width=True)
-                st.markdown('</div>', unsafe_allow_html=True)
-
-                st.markdown('<div class="card">', unsafe_allow_html=True)
-                st.subheader("💡 AI Strategic Summary")
-                # <<< --- RESTORED: Calling the LLM function with the filtered data --- >>>
+                st.subheader("💡 Key AI Insights")
                 if not filtered_df.empty and filtered_df['Direct Sales'].sum() > 0:
-                    with st.spinner("🤖 Generating strategic insights..."):
-                        llm_insights = generate_llm_insights(filtered_df, roas_w)
-                        st.markdown(llm_insights)
-                st.markdown('</div>', unsafe_allow_html=True)
-
-                st.markdown('<div class="card">', unsafe_allow_html=True)
+                    total_sales = filtered_df['Direct Sales'].sum(); total_new_budget = filtered_df['Final_Allocated_Budget'].sum(); insight_df = filtered_df.groupby(['Brand', 'Platform']).agg(Historical_Sales=('Direct Sales', 'sum'), Allocated_Budget=('Final_Allocated_Budget', 'sum')).reset_index(); insight_df['Sales_Share'] = insight_df['Historical_Sales'] / total_sales; insight_df['Budget_Share'] = insight_df['Allocated_Budget'] / total_new_budget; insight_df['Lift'] = insight_df['Budget_Share'] / (insight_df['Sales_Share'] + 1e-9); hidden_gem = insight_df[insight_df['Allocated_Budget'] > 0].nlargest(1, 'Lift'); overpriced_performer = insight_df[insight_df['Historical_Sales'] > 0].nsmallest(1, 'Lift')
+                    if roas_w >= 0.7: strategy = "to **maximize short-term profitability**."
+                    elif roas_w <= 0.3: strategy = "for **aggressive customer acquisition**."
+                    else: strategy = "for **balanced growth**."
+                    st.markdown(f"- **Strategy Focus:** The current weights configure the AI {strategy}")
+                    if not hidden_gem.empty: gem_row = hidden_gem.iloc[0]; st.markdown(f"- **Hidden Gem:** The model identified **{gem_row['Brand']} on {gem_row['Platform']}** as a key growth opportunity.")
+                    if not overpriced_performer.empty: op_row = overpriced_performer.iloc[0]; st.markdown(f"- **Efficiency Optimization:** While **{op_row['Brand']} on {op_row['Platform']}** was a strong historical performer, the model suggests reallocating some budget to more efficient areas.")
                 st.subheader("Operational Health Summary (Last 3 Days)")
                 if not recent_issues.empty:
                     unresolved_issues_df = recent_issues[~recent_issues.index.isin(st.session_state.get('resolved_issues', set()))]
@@ -179,10 +168,10 @@ else:
                         with issue_viz_cols[1]: pincode_counts = unresolved_issues_df['Pin Code'].value_counts().nlargest(10); fig_pincode_issues = px.pie(pincode_counts, values=pincode_counts.values, names=pincode_counts.index, title="Top 10 Pin Codes with Issues", hole=0.4); st.plotly_chart(fig_pincode_issues, use_container_width=True)
                     else: st.success("✅ No unresolved content issues found in the last 3 days.")
                 else: st.success("✅ No content issues found in the last 3 days.")
-                st.markdown('</div>', unsafe_allow_html=True)
             else:
                 st.info("Adjust settings in the sidebar and click 'Run' to generate an allocation.")
         
+        # (Other tabs are unchanged and complete)
         with tab2:
             if 'final_df' in st.session_state: st.header("Full Allocation Details"); st.dataframe(st.session_state.final_df); st.download_button("📥 Download Full Data", to_csv(st.session_state.final_df), "full_alloc.csv")
             else: st.info("Run an allocation to see data.")
