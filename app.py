@@ -1,4 +1,4 @@
-# app.py (v59 - DEFINITIVE, ALL FEATURES RESTORED, PROFESSIONAL UI)
+# app.py (v60 - DEFINITIVE PROFESSIONAL UI)
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -35,7 +35,7 @@ st.markdown("""
         padding: 25px;
         background-color: white;
         box-shadow: 0 4px 12px 0 rgba(0,0,0,0.05);
-        margin-bottom: 20px;
+        margin-bottom: 20px; /* Space between cards */
     }
     /* Style headers */
     h1, h2, h3, h4, h5, h6 {
@@ -44,6 +44,7 @@ st.markdown("""
     /* Style the sidebar */
     .st-emotion-cache-16txtl3 {
         padding: 1.5rem 1.2rem;
+        background-color: #FFFFFF;
     }
     /* Issue card styling */
     .issue-card {
