@@ -1,4 +1,4 @@
-# app.py (v53 - FINAL, GOSS-ACCELERATED MODEL)
+# app.py (v54 - FINAL, HYPER-PERFORMANCE MODEL)
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -54,14 +54,14 @@ def get_allocation_recommendations(df, budget_multiplier, roas_weight):
     for col in features: X[col] = X[col].astype("category")
     lgb_data = lgb.Dataset(X, label=y, categorical_feature=features)
     
-    # <<< --- HIGH-PERFORMANCE TUNING: Using a faster training algorithm --- >>>
+    # <<< --- HYPER-PERFORMANCE TUNING: A faster, lighter model for dashboard interactivity --- >>>
     params = {
         "objective": "regression_l1",
-        "metric": "rmse",
-        "boosting_type": "goss",  # Use the faster GOSS algorithm
-        "n_estimators": 80,
-        "num_leaves": 15,
+        "boosting_type": "goss",  # The fastest algorithm
+        "n_estimators": 50,       # Reduced training rounds significantly
+        "num_leaves": 10,         # Simplified model structure
         "learning_rate": 0.1,
+        "feature_fraction": 0.8,  # Use a subset of features for each tree
         "seed": 42,
         "verbosity": -1,
     }
@@ -75,7 +75,6 @@ def get_allocation_recommendations(df, budget_multiplier, roas_weight):
     return df_agg
 
 def send_oos_email(manager_email, brand, sku, pincode, stock_left):
-    # (This function is unchanged)
     try:
         sender = st.secrets["email_credentials"]["sender_email"]; password = st.secrets["email_credentials"]["sender_password"]
         subject = f"🚨 URGENT: Low Stock Alert for {brand}"; body = f"Hello,\n\nThis is an automated alert.\n\nThe following item is running low on stock in your area:\n\n- Brand: {brand}\n- SKU: {sku}\n- Pin Code: {pincode}\n- Stock Left: {stock_left}\n\nPlease take action to restock.\n\nThank you,\nITC AI Operations Bot"
