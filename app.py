@@ -1,4 +1,4 @@
-# app.py (v60 - DEFINITIVE PROFESSIONAL UI)
+# app.py (v61 - DEFINITIVE PROFESSIONAL UI)
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -21,32 +21,19 @@ if 'resolved_oos' not in st.session_state: st.session_state.resolved_oos = set()
 # --- Hashing Context ---
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
-# --- CUSTOM CSS FOR PROFESSIONAL UI ---
+# --- CUSTOM CSS FOR A CLEANER LOOK ---
 st.markdown("""
 <style>
-    /* Main container styling */
     .main .block-container {
         padding: 1rem 3rem 2rem;
     }
-    /* Create card-like containers */
-    .card {
-        border: 1px solid #E6E9EF;
-        border-radius: 10px;
-        padding: 25px;
-        background-color: white;
-        box-shadow: 0 4px 12px 0 rgba(0,0,0,0.05);
-        margin-bottom: 20px; /* Space between cards */
-    }
-    /* Style headers */
     h1, h2, h3, h4, h5, h6 {
         color: #1E293B;
     }
-    /* Style the sidebar */
     .st-emotion-cache-16txtl3 {
         padding: 1.5rem 1.2rem;
         background-color: #FFFFFF;
     }
-    /* Issue card styling */
     .issue-card {
         border: 1px solid #ff4b4b;
         border-left: 5px solid #ff4b4b;
@@ -150,30 +137,19 @@ else:
         with tab1:
             if 'final_df' in st.session_state:
                 final_df = st.session_state.final_df
-                # <<< --- UI OVERHAUL: Professional Filter Card --- >>>
-                st.markdown('<div class="card">', unsafe_allow_html=True)
-                st.subheader("🔍 Filter Dashboard Results")
-                col1, col2, col3, col4, col5 = st.columns(5)
-                brands = sorted(final_df['Brand'].unique()); selected_brands = col1.multiselect("Brand", brands, default=brands); platforms = sorted(final_df['Platform'].unique()); selected_platforms = col2.multiselect("Platform", platforms, default=platforms); ad_types = sorted(final_df['Ad Type'].unique()); selected_ad_types = col3.multiselect("Ad Type", ad_types, default=ad_types); tiers = sorted(final_df['Tier'].unique()); selected_tiers = col4.multiselect("Tier", tiers, default=tiers); time_slots = sorted(final_df['Time Slot'].unique()); selected_slots = col5.multiselect("Time Slot", time_slots, default=time_slots)
-                st.markdown('</div>', unsafe_allow_html=True)
+                # <<< --- UI OVERHAUL: Using st.expander for a clean filter UI --- >>>
+                with st.expander("🔍 Filter Dashboard Results", expanded=True):
+                    col1, col2, col3, col4, col5 = st.columns(5)
+                    brands = sorted(final_df['Brand'].unique()); selected_brands = col1.multiselect("Brand", brands, default=brands); platforms = sorted(final_df['Platform'].unique()); selected_platforms = col2.multiselect("Platform", platforms, default=platforms); ad_types = sorted(final_df['Ad Type'].unique()); selected_ad_types = col3.multiselect("Ad Type", ad_types, default=ad_types); tiers = sorted(final_df['Tier'].unique()); selected_tiers = col4.multiselect("Tier", tiers, default=tiers); time_slots = sorted(final_df['Time Slot'].unique()); selected_slots = col5.multiselect("Time Slot", time_slots, default=time_slots)
                 
                 filtered_df = final_df[(final_df['Brand'].isin(selected_brands)) & (final_df['Platform'].isin(selected_platforms)) & (final_df['Ad Type'].isin(selected_ad_types)) & (final_df['Tier'].isin(selected_tiers)) & (final_df['Time Slot'].isin(selected_slots))]
                 
-                # <<< --- UI OVERHAUL: KPIs in a Card --- >>>
-                st.markdown('<div class="card">', unsafe_allow_html=True)
+                # (The rest of the tab content is unchanged and correct)
                 st.subheader("Financial Summary")
                 kpi_cols = st.columns(3); original_budget = filtered_df['Budget Spent'].sum(); new_budget = filtered_df['Final_Allocated_Budget'].sum(); sales = filtered_df['Direct Sales'].sum(); kpi_cols[0].metric("Original Budget", f"₹{original_budget:,.0f}"); kpi_cols[1].metric("Optimized Budget", f"₹{new_budget:,.0f}", f"{((new_budget/max(1, original_budget))-1):.1%}"); kpi_cols[2].metric("Historical Sales", f"₹{sales:,.0f}")
-                st.markdown('</div>', unsafe_allow_html=True)
-                
-                # <<< --- UI OVERHAUL: Charts in a Card --- >>>
-                st.markdown('<div class="card">', unsafe_allow_html=True)
                 st.subheader("Allocation Visualizations")
                 viz_cols = st.columns(2); brand_summary = filtered_df.groupby('Brand')['Final_Allocated_Budget'].sum().sort_values(ascending=False); fig_brand = px.bar(brand_summary, x=brand_summary.index, y='Final_Allocated_Budget', title="Optimized Budget by Brand", labels={'Final_Allocated_Budget': 'Budget (₹)', 'index': 'Brand'}, text_auto='.2s'); fig_brand.update_traces(textposition='outside'); viz_cols[0].plotly_chart(fig_brand, use_container_width=True)
                 platform_summary = filtered_df.groupby('Platform')['Final_Allocated_Budget'].sum(); fig_platform = px.pie(platform_summary, values='Final_Allocated_Budget', names=platform_summary.index, title="Optimized Budget by Platform", hole=.3); viz_cols[1].plotly_chart(fig_platform, use_container_width=True)
-                st.markdown('</div>', unsafe_allow_html=True)
-
-                # <<< --- RESTORED: Key AI Insights in a Card --- >>>
-                st.markdown('<div class="card">', unsafe_allow_html=True)
                 st.subheader("💡 Key AI Insights")
                 if not filtered_df.empty and filtered_df['Direct Sales'].sum() > 0:
                     total_sales = filtered_df['Direct Sales'].sum(); total_new_budget = filtered_df['Final_Allocated_Budget'].sum(); insight_df = filtered_df.groupby(['Brand', 'Platform']).agg(Historical_Sales=('Direct Sales', 'sum'), Allocated_Budget=('Final_Allocated_Budget', 'sum')).reset_index(); insight_df['Sales_Share'] = insight_df['Historical_Sales'] / total_sales; insight_df['Budget_Share'] = insight_df['Allocated_Budget'] / total_new_budget; insight_df['Lift'] = insight_df['Budget_Share'] / (insight_df['Sales_Share'] + 1e-9); hidden_gem = insight_df[insight_df['Allocated_Budget'] > 0].nlargest(1, 'Lift'); overpriced_performer = insight_df[insight_df['Historical_Sales'] > 0].nsmallest(1, 'Lift')
@@ -183,10 +159,6 @@ else:
                     st.markdown(f"- **Strategy Focus:** The current weights configure the AI {strategy}")
                     if not hidden_gem.empty: gem_row = hidden_gem.iloc[0]; st.markdown(f"- **Hidden Gem:** The model identified **{gem_row['Brand']} on {gem_row['Platform']}** as a key growth opportunity.")
                     if not overpriced_performer.empty: op_row = overpriced_performer.iloc[0]; st.markdown(f"- **Efficiency Optimization:** While **{op_row['Brand']} on {op_row['Platform']}** was a strong historical performer, the model suggests reallocating some budget to more efficient areas.")
-                st.markdown('</div>', unsafe_allow_html=True)
-
-                # <<< --- RESTORED: Operational Health Charts in a Card --- >>>
-                st.markdown('<div class="card">', unsafe_allow_html=True)
                 st.subheader("Operational Health Summary (Last 3 Days)")
                 if not recent_issues.empty:
                     unresolved_issues_df = recent_issues[~recent_issues.index.isin(st.session_state.get('resolved_issues', set()))]
@@ -196,7 +168,6 @@ else:
                         with issue_viz_cols[1]: pincode_counts = unresolved_issues_df['Pin Code'].value_counts().nlargest(10); fig_pincode_issues = px.pie(pincode_counts, values=pincode_counts.values, names=pincode_counts.index, title="Top 10 Pin Codes with Issues", hole=0.4); st.plotly_chart(fig_pincode_issues, use_container_width=True)
                     else: st.success("✅ No unresolved content issues found in the last 3 days.")
                 else: st.success("✅ No content issues found in the last 3 days.")
-                st.markdown('</div>', unsafe_allow_html=True)
             else:
                 st.info("Adjust settings in the sidebar and click 'Run' to generate an allocation.")
         
