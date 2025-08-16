@@ -224,8 +224,9 @@ else:
                                 else: st.warning("No manager email available.")
                         st.markdown('</div>', unsafe_allow_html=True)
         with tab5:
-            st.header("Open the Live E-Commerce Dashboard"); POWER_BI_URL = "https://app.powerbi.com/groups/me/reports/4d9f2e70-e22d-464c-a997-355c8559558e/4f5955ee3b04ded7b3da?experience=power-bi"
+            st.header("Open the Live E-Commerce Dashboard"); POWER_BI_URL = "https://app.powerbi.com/groups/me/reports/d07795dc-3087-463f-8d38-01b1c1dfe389/4f5965ee3b04ded7b3da?experience=power-bi"
             st.markdown(f'<a href="{POWER_BI_URL}" target="_blank" style="display: inline-block; padding: 12px 20px; background-color: #1a73e8; color: white; text-align: center; text-decoration: none; font-size: 16px; border-radius: 5px;">🔗 Open Secure Power BI Report</a>', unsafe_allow_html=True)
 
     except Exception as e:
         st.error(f"An unexpected error occurred: {e}")
+
